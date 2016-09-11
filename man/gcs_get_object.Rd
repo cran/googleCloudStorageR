@@ -4,11 +4,11 @@
 \alias{gcs_get_object}
 \title{Get an object in a bucket directly}
 \usage{
-gcs_get_object(object_name, bucket, meta = FALSE, saveToDisk = NULL,
-  parseObject = TRUE)
+gcs_get_object(object_name, bucket = gcs_get_global_bucket(), meta = FALSE,
+  saveToDisk = NULL, parseObject = TRUE)
 }
 \arguments{
-\item{object_name}{name of object in the bucket}
+\item{object_name}{name of object in the bucket. URL encoded.}
 
 \item{bucket}{bucket containing the objects}
 
@@ -27,6 +27,8 @@ This differs from providing downloads via a download link as you can
   do via \link{gcs_download_url}
 }
 \seealso{
-Other object functions: \code{\link{gcs_list_objects}}
+Other object functions: \code{\link{gcs_delete_object}},
+  \code{\link{gcs_list_objects}},
+  \code{\link{gcs_metadata_object}}
 }
 

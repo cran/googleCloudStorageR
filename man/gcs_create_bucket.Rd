@@ -10,7 +10,7 @@ gcs_create_bucket(name, projectId, location = "US",
   "publicRead", "publicReadWrite"),
   predefinedDefaultObjectAcl = c("authenticatedRead", "private",
   "projectPrivate", "publicRead", "publicReadWrite"), projection = c("noAcl",
-  "full"))
+  "full"), versioning = FALSE, lifecycle = NULL)
 }
 \arguments{
 \item{name}{Globally unique name of bucket to create}
@@ -26,18 +26,23 @@ gcs_create_bucket(name, projectId, location = "US",
 \item{predefinedDefaultObjectAcl}{Apply predefined access controls to objects}
 
 \item{projection}{Properties to return. Default noAcl omits acl properties}
+
+\item{versioning}{Set if the bucket supports versioning of its objects}
+
+\item{lifecycle}{A list of \link{gcs_create_lifecycle} objects}
 }
 \description{
 Create a new bucket in your project
 }
 \details{
 \href{https://cloud.google.com/storage/docs/bucket-locations}{See here for details on location options}
-
-todo: acl, cors, lifecycle, logging, versioning, website
 }
 \seealso{
-Other bucket functions: \code{\link{gcs_get_bucket}},
-  \code{\link{gcs_list_buckets}},
-  \code{\link{gcs_update_bucket}}
+Other bucket functions: \code{\link{gcs_create_lifecycle}},
+  \code{\link{gcs_delete_bucket}},
+  \code{\link{gcs_get_bucket}},
+  \code{\link{gcs_get_global_bucket}},
+  \code{\link{gcs_global_bucket}},
+  \code{\link{gcs_list_buckets}}
 }
 

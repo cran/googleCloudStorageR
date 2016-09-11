@@ -4,11 +4,12 @@
 \alias{gcs_get_bucket}
 \title{Get bucket info}
 \usage{
-gcs_get_bucket(bucket, ifMetagenerationMatch = NULL,
-  ifMetagenerationNotMatch = NULL, projection = c("noAcl", "full"))
+gcs_get_bucket(bucket = gcs_get_global_bucket(),
+  ifMetagenerationMatch = NULL, ifMetagenerationNotMatch = NULL,
+  projection = c("noAcl", "full"))
 }
 \arguments{
-\item{bucket}{Name of a bucket}
+\item{bucket}{Name of a bucket, or a bucket object returned by \link{gcs_create_bucket}}
 
 \item{ifMetagenerationMatch}{Return only if metageneration matches}
 
@@ -24,7 +25,10 @@ Meta data about the bucket
 }
 \seealso{
 Other bucket functions: \code{\link{gcs_create_bucket}},
-  \code{\link{gcs_list_buckets}},
-  \code{\link{gcs_update_bucket}}
+  \code{\link{gcs_create_lifecycle}},
+  \code{\link{gcs_delete_bucket}},
+  \code{\link{gcs_get_global_bucket}},
+  \code{\link{gcs_global_bucket}},
+  \code{\link{gcs_list_buckets}}
 }
 

@@ -4,10 +4,13 @@
 \alias{gcs_list_objects}
 \title{List objects in a bucket}
 \usage{
-gcs_list_objects(bucket)
+gcs_list_objects(bucket = gcs_get_global_bucket(), detail = c("summary",
+  "more", "full"))
 }
 \arguments{
 \item{bucket}{bucket containing the objects}
+
+\item{detail}{Set level of detail}
 }
 \value{
 A data.frame of the objects
@@ -15,7 +18,18 @@ A data.frame of the objects
 \description{
 List objects in a bucket
 }
+\details{
+Columns returned by \code{detail} are:
+
+\itemize{
+  \item \code{summary} - name, size, updated
+  \item \code{more} - as above plus: bucket, contentType, storageClass, timeCreated
+  \item \code{full} - as above plus: id, selfLink, generation, metageneration, md5Hash, mediaLink, crc32c, etag
+ }
+}
 \seealso{
-Other object functions: \code{\link{gcs_get_object}}
+Other object functions: \code{\link{gcs_delete_object}},
+  \code{\link{gcs_get_object}},
+  \code{\link{gcs_metadata_object}}
 }
 
