@@ -12,11 +12,11 @@ gcs_parse_download(object, encoding = "UTF-8")
 \item{encoding}{Default to UTF-8}
 }
 \description{
-Wrapper for httr::content
+Wrapper for \code{httr}'s \link[httr]{content}.  This is the default function used in \link{gcs_get_object}
 }
 \seealso{
 gcs_get_object
 
-Other download functions: \code{\link{gcs_download_url}}
+Other download functions: \code{\link{gcs_download_url}},
+  \code{\link{gcs_signed_url}}
 }
-

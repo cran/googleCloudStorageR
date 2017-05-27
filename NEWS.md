@@ -1,3 +1,18 @@
+# 0.3.0
+
+* Correct metadata upload (#55 - thanks AndrewMarritt)
+* Let `gcs_object_metaname` not require name so it can be reused (#56 - thanks seandavi)
+* Add support for `gs://` style URLs for object names (#57 - thanks seandavi)
+* Add what the public URL would be to an objects print method (#59 - thanks mwhitaker)
+* Add check to `gcs_get_bucket()` to only expect length 1 character vectors for bucket name. (#60)
+* Add paging for `gcs_object_list` (#58 - thanks @G3rtjan)
+* Add `saveToDisk` option to `gcs_load` (#52 - thanks @tomsing1)
+* Supply your own parse function to `gcs_get_object()` (#63 - thanks @nkeriks)
+* Support for `prefix` and `delimiter` in `gcs_object_list` to filter objects listed (#68)
+* Default permissions on new buckets lets you write to them afterwards `projectPrivate (#62)
+* `gcs_get_object` now supports downloads over 2GB (#69)
+* Add support for signed URLs (#54 - thanks seandavi)
+
 # 0.2.0
 
 * Fix bug where you can't rename objects via name in `gcs_upload`

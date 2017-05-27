@@ -5,30 +5,71 @@
 \title{Get an object in a bucket directly}
 \usage{
 gcs_get_object(object_name, bucket = gcs_get_global_bucket(), meta = FALSE,
-  saveToDisk = NULL, parseObject = TRUE)
+  saveToDisk = NULL, overwrite = FALSE, parseObject = TRUE,
+  parseFunction = gcs_parse_download)
 }
 \arguments{
-\item{object_name}{name of object in the bucket. URL encoded.}
+\item{object_name}{name of object in the bucket that will be URL encoded, or a \code{gs://} URL}
 
-\item{bucket}{bucket containing the objects}
+\item{bucket}{bucket containing the objects. Not needed if using a \code{gs://} URL}
 
 \item{meta}{If TRUE then get info about the object, not the object itself}
 
-\item{saveToDisk}{Specify a filename to save directly to disk.}
+\item{saveToDisk}{Specify a filename to save directly to disk}
 
-\item{parseObject}{If saveToDisk is NULL, whether to parse with \link{gcs_parse_download}}
+\item{overwrite}{If saving to a file, whether to overwrite it}
+
+\item{parseObject}{If saveToDisk is NULL, whether to parse with \code{parseFunction}}
+
+\item{parseFunction}{If saveToDisk is NULL, the function that will parse the download.  Defaults to \link{gcs_parse_download}}
 }
 \value{
-The object, or TRUE if sucessfully saved to disk.
+The object, or TRUE if successfully saved to disk.
 }
 \description{
 This retrieves an object directly.
+}
+\details{
 This differs from providing downloads via a download link as you can
   do via \link{gcs_download_url}
+
+\code{object_name} can use a \code{gs://} URI instead,
+in which case it will take the bucket name from that URI and \code{bucket} argument
+will be overridden.  The URLs should be in the form \code{gs://bucket/object/name}
+
+By default if you want to get the object straight into an R session the parseFunction is \link{gcs_parse_download} which wraps \code{httr}'s \link[httr]{content}.
+
+If you want to use your own function (say to unzip the object) then supply it here.  The first argument should take the downloaded object.
+}
+\examples{
+
+\dontrun{
+
+## something to download
+## data.frame that defaults to be called "mtcars.csv"
+gcs_upload(mtcars)
+
+## get the mtcars csv from GCS, convert it to an R obj
+gcs_get_object("mtcars.csv")
+
+## get the mtcars csv from GCS, save it to disk
+gcs_get_object("mtcars.csv", saveToDisk = "mtcars.csv")
+
+
+## default gives a warning about missing column name.
+## custom parse function to suppress warning
+f <- function(object){
+  suppressWarnings(httr::content(object, encoding = "UTF-8"))
+}
+
+## get mtcars csv with custom parse function.
+gcs_get_object("mtcars_meta.csv", parseFunction = f)
+
+}
+
 }
 \seealso{
 Other object functions: \code{\link{gcs_delete_object}},
   \code{\link{gcs_list_objects}},
   \code{\link{gcs_metadata_object}}
 }
-

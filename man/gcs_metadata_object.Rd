@@ -4,7 +4,7 @@
 \alias{gcs_metadata_object}
 \title{Make metadata for an object}
 \usage{
-gcs_metadata_object(object_name, metadata = NULL, md5Hash = NULL,
+gcs_metadata_object(object_name = NULL, metadata = NULL, md5Hash = NULL,
   crc32c = NULL, contentLanguage = NULL, contentEncoding = NULL,
   contentDisposition = NULL, cacheControl = NULL)
 }
@@ -36,4 +36,3 @@ Other object functions: \code{\link{gcs_delete_object}},
   \code{\link{gcs_get_object}},
   \code{\link{gcs_list_objects}}
 }
-

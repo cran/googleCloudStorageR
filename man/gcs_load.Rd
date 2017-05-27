@@ -2,10 +2,10 @@
 % Please edit documentation in R/rsession.R
 \name{gcs_load}
 \alias{gcs_load}
-\title{Load an R session from the Google Cloud}
+\title{Load .RData objects or sessions from the Google Cloud}
 \usage{
 gcs_load(file = ".RData", bucket = gcs_get_global_bucket(),
-  envir = .GlobalEnv)
+  envir = .GlobalEnv, saveToDisk = file)
 }
 \arguments{
 \item{file}{Where the files are stored}
@@ -13,6 +13,8 @@ gcs_load(file = ".RData", bucket = gcs_get_global_bucket(),
 \item{bucket}{Bucket the stored objects are in}
 
 \item{envir}{Environment to load objects into}
+
+\item{saveToDisk}{Where to save the loaded file.  Default same file name}
 }
 \value{
 TRUE if successful
@@ -31,4 +33,3 @@ This would overwrite your existing \code{.RData} file in the working directory, 
 Other R session data functions: \code{\link{gcs_save_image}},
   \code{\link{gcs_save}}, \code{\link{gcs_source}}
 }
-

@@ -10,7 +10,7 @@ gcs_list_buckets(projectId, prefix = "", projection = c("noAcl", "full"),
 \arguments{
 \item{projectId}{Project containing buckets to list}
 
-\item{prefix}{Filter results to names begnning with this prefix}
+\item{prefix}{Filter results to names beginning with this prefix}
 
 \item{projection}{Properties to return. Default noAcl omits acl properties}
 
@@ -19,7 +19,7 @@ gcs_list_buckets(projectId, prefix = "", projection = c("noAcl", "full"),
 \item{detail}{Set level of detail}
 }
 \value{
-data.frame of buckets
+\code{data.frame} of buckets
 }
 \description{
 List the buckets your projectId has access to
@@ -32,6 +32,18 @@ Columns returned by \code{detail} are:
   \item \code{full} - as above plus: id, selfLink, projectNumber, timeCreated, metageneration, etag
  }
 }
+\examples{
+
+\dontrun{
+
+buckets <- gcs_list_buckets("your-project")
+
+## use the name of the bucket to get more meta data
+bucket_meta <- gcs_get_bucket(buckets$name[[1]])
+
+}
+
+}
 \seealso{
 Other bucket functions: \code{\link{gcs_create_bucket}},
   \code{\link{gcs_create_lifecycle}},
@@ -40,4 +52,3 @@ Other bucket functions: \code{\link{gcs_create_bucket}},
   \code{\link{gcs_get_global_bucket}},
   \code{\link{gcs_global_bucket}}
 }
-

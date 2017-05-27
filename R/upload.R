@@ -1,4 +1,4 @@
-#' Upload a file of arbitary type
+#' Upload a file of arbitrary type
 #'
 #' Upload up to 5TB
 #'
@@ -46,6 +46,39 @@
 #'   or \code{https://www.googleapis.com/auth/devstorage.full_control}
 #'
 #' @return If successful, a metadata object
+#'
+#' @examples
+#'
+#' \dontrun{
+#'
+#' ## set global bucket so don't need to keep supplying in future calls
+#' gcs_global_bucket("my-bucket")
+#'
+#' ## by default will convert dataframes to csv
+#' gcs_upload(mtcars)
+#'
+#' ## mtcars has been renamed to mtcars.csv
+#' gcs_list_objects()
+#'
+#' ## to specify the name, use the name argument
+#' gcs_upload(mtcars, name = "my_mtcars.csv")
+#'
+#' ## when looping, its best to specify the name else it will take
+#' ## the deparsed function call e.g. X[[i]]
+#' my_files <- list.files("my_uploads")
+#' lapply(my_files, function(x) gcs_upload(x, name = x))
+#'
+#' ## you can supply your own function to transform R objects before upload
+#' f <- function(input, output){
+#'   write.csv2(input, file = output)
+#' }
+#'
+#' gcs_upload(mtcars, name = "mtcars_csv2.csv", object_function = f)
+#'
+#' }
+#'
+#'
+#'
 #' @import httr utils
 #' @export
 gcs_upload <- function(file,
@@ -58,7 +91,7 @@ gcs_upload <- function(file,
                          "private",
                          "authenticatedRead",
                          "bucketOwnerFullControl",
-                         "buckerOwnerRead",
+                         "bucketOwnerRead",
                          "projectPrivate",
                          "publicRead"
                        ),
@@ -197,7 +230,7 @@ gcs_upload <- function(file,
     on.exit(unlink(temp2))
 
     ## http://stackoverflow.com/questions/31080363/how-to-post-multipart-related-content-with-httr-for-google-drive-api
-    writeLines(jsonlite::toJSON(object_metadata), temp2)
+    writeLines(jsonlite::toJSON(object_metadata, auto_unbox = TRUE), temp2)
 
     bb <- list(
       metadata = httr::upload_file(temp2, type = "application/json; charset=UTF-8"),
@@ -271,7 +304,8 @@ gcs_retry_upload <- function(retry_object=NULL, upload_url=NULL, file=NULL, type
       stop("Must supply either retry_object or all of upload_url, file and type")
     }
   } else {
-    stopifnot(inherits(retry_object, "gcs_upload_retry"))
+
+    assertthat::assert_that(inherits(retry_object, "gcs_upload_retry"))
 
     upload_url <- retry_object$upload_url
     file <- retry_object$file

@@ -2,7 +2,8 @@
 #'
 #' @param bucket bucket containing the objects
 #' @param detail Set level of detail
-#'
+#' @param prefix Filter results to objects whose names begin with this prefix
+#' @param delimiter Use to list objects like a directory listing.
 #' @details
 #'
 #' Columns returned by \code{detail} are:
@@ -13,59 +14,172 @@
 #'   \item \code{full} - as above plus: id, selfLink, generation, metageneration, md5Hash, mediaLink, crc32c, etag
 #'  }
 #'
+#'  \code{delimited} returns results in a directory-like mode: items will contain only objects whose names,
+#'     aside from the prefix, do not contain delimiter. In conjunction with the prefix filter,
+#'     the use of the delimiter parameter allows the list method to operate like a directory listing,
+#'     despite the object namespace being flat.
+#'     For example, if delimiter were set to \code{"/"}, then listing objects from a bucket that contains the
+#'     objects \code{"a/b", "a/c", "dddd", "eeee", "e/f"} would return objects \code{"dddd" and "eeee"},
+#'     and prefixes \code{"a/" and "e/"}.
+#'
 #'
 #' @return A data.frame of the objects
 #'
 #' @family object functions
 #' @export
 gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
-                             detail = c("summary","more","full")){
+                             detail = c("summary","more","full"),
+                             prefix = NULL,
+                             delimiter = NULL){
 
   detail <- match.arg(detail)
 
-  testthat::expect_type(bucket, "character")
-  testthat::expect_length(bucket, 1)
+  assertthat::assert_that(
+    is.character(bucket),
+    is.unit(bucket)
+  )
 
-  parse_lo <- function(x){
-    x <- x$items
-    x$timeCreated <- timestamp_to_r(x$timeCreated)
-    x$updated <- timestamp_to_r(x$updated)
-    x$kind <- NULL
-    x$size <- vapply(as.numeric(x$size), function(x) format_object_size(x, "auto"), character(1))
-    x
-  }
+  pars <- list(prefix = prefix,
+               delimiter = delimiter)
+  pars <- rmNullObs(pars)
 
   lo <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
                                       path_args = list(b = bucket,
                                                        o = ""),
+                                      pars_args = pars,
                                       data_parse_function = parse_lo)
   req <- lo()
 
-  out_names <- switch(detail,
-      summary = c("name", "size", "updated"),
-      more = c("name", "size", "bucket", "contentType", "timeCreated", "updated", "storageClass"),
-      full = TRUE
-                )
+  ## page through list if necessary
+  if(!is.null(attr(req, "nextPageToken"))){
+    npt <- attr(req, "nextPageToken")
 
-  req[,out_names]
+    while(!is.null(npt)){
+      myMessage("Paging through results: ", npt, level = 3)
+      lo2 <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
+                                            path_args = list(b = bucket,
+                                                             o = ""),
+                                            pars_args = c(pars, list(pageToken = npt)),
+                                            data_parse_function = parse_lo)
+      more_req <- lo2(pars_arguments = npt)
 
+      npt <- attr(more_req, "nextPageToken")
+      req <- rbind(req, more_req)
+    }
+  }
+
+
+
+  if(nrow(req) > 0){
+    out_names <- switch(detail,
+                        summary = c("name", "size", "updated"),
+                        more = c("name", "size", "bucket", "contentType", "timeCreated", "updated", "storageClass"),
+                        full = TRUE
+    )
+    req[,out_names]
+  }
+
+  req
+
+}
+
+## parse
+parse_lo <- function(x){
+  nextPageToken <- x$nextPageToken
+  if(is.null(x$items)){
+    myMessage("No objects found", level = 3)
+    return(data.frame())
+  }
+  x <- x$items
+  if(is.null(x$prefixes)){
+    myMessage("No prefixes found", level = 2)
+    prefixes <- NULL
+  } else {
+    prefixes <- x$prefixes
+  }
+  x$timeCreated <- timestamp_to_r(x$timeCreated)
+  x$updated <- timestamp_to_r(x$updated)
+  x$kind <- NULL
+  x$size <- vapply(as.numeric(x$size), function(x) format_object_size(x, "auto"), character(1))
+
+  attr(x, "nextPageToken") <- nextPageToken
+  attr(x, "prefixes") <- prefixes
+  x
+}
+
+# Parse gs:// URIs to bucket and name
+gcs_parse_gsurls <- function(gsurl){
+
+  assertthat::assert_that(is.character(gsurl))
+
+  if(grepl("^gs://", gsurl)){
+    ## parse out bucket and object name
+    bucket <- gsub("^gs://(.+?)/(.+)$","\\1", gsurl)
+    obj <- gsub(paste0("^gs://",bucket,"/"), "", gsurl)
+
+    out <- list(bucket = bucket, obj = obj)
+  } else {
+    # not a gs:// URL
+    out <- NULL
+  }
+
+  out
 
 }
 
 #' Get an object in a bucket directly
 #'
 #' This retrieves an object directly.
+#'
+#'
+#' @param object_name name of object in the bucket that will be URL encoded, or a \code{gs://} URL
+#' @param bucket bucket containing the objects. Not needed if using a \code{gs://} URL
+#' @param meta If TRUE then get info about the object, not the object itself
+#' @param saveToDisk Specify a filename to save directly to disk
+#' @param overwrite If saving to a file, whether to overwrite it
+#' @param parseObject If saveToDisk is NULL, whether to parse with \code{parseFunction}
+#' @param parseFunction If saveToDisk is NULL, the function that will parse the download.  Defaults to \link{gcs_parse_download}
+#'
+#' @details
+#'
 #' This differs from providing downloads via a download link as you can
 #'   do via \link{gcs_download_url}
 #'
+#' \code{object_name} can use a \code{gs://} URI instead,
+#' in which case it will take the bucket name from that URI and \code{bucket} argument
+#' will be overridden.  The URLs should be in the form \code{gs://bucket/object/name}
 #'
-#' @param object_name name of object in the bucket. URL encoded.
-#' @param bucket bucket containing the objects
-#' @param meta If TRUE then get info about the object, not the object itself
-#' @param saveToDisk Specify a filename to save directly to disk.
-#' @param parseObject If saveToDisk is NULL, whether to parse with \link{gcs_parse_download}
+#' By default if you want to get the object straight into an R session the parseFunction is \link{gcs_parse_download} which wraps \code{httr}'s \link[httr]{content}.
 #'
-#' @return The object, or TRUE if sucessfully saved to disk.
+#' If you want to use your own function (say to unzip the object) then supply it here.  The first argument should take the downloaded object.
+#'
+#' @return The object, or TRUE if successfully saved to disk.
+#'
+#' @examples
+#'
+#' \dontrun{
+#'
+#' ## something to download
+#' ## data.frame that defaults to be called "mtcars.csv"
+#' gcs_upload(mtcars)
+#'
+#' ## get the mtcars csv from GCS, convert it to an R obj
+#' gcs_get_object("mtcars.csv")
+#'
+#' ## get the mtcars csv from GCS, save it to disk
+#' gcs_get_object("mtcars.csv", saveToDisk = "mtcars.csv")
+#'
+#'
+#' ## default gives a warning about missing column name.
+#' ## custom parse function to suppress warning
+#' f <- function(object){
+#'   suppressWarnings(httr::content(object, encoding = "UTF-8"))
+#' }
+#'
+#' ## get mtcars csv with custom parse function.
+#' gcs_get_object("mtcars_meta.csv", parseFunction = f)
+#'
+#' }
 #'
 #' @family object functions
 #' @export
@@ -73,12 +187,28 @@ gcs_get_object <- function(object_name,
                            bucket = gcs_get_global_bucket(),
                            meta = FALSE,
                            saveToDisk = NULL,
-                           parseObject = TRUE){
+                           overwrite = FALSE,
+                           parseObject = TRUE,
+                           parseFunction = gcs_parse_download){
 
-  testthat::expect_type(bucket, "character")
-  testthat::expect_type(object_name, "character")
-  testthat::expect_length(bucket, 1)
-  testthat::expect_length(object_name, 1)
+  assertthat::assert_that(
+    is.character(object_name),
+    is.unit(object_name),
+    is.logical(meta),
+    is.logical(parseObject)
+  )
+
+  parse_gsurl <- gcs_parse_gsurls(object_name)
+  if(!is.null(parse_gsurl)){
+    object_name <- parse_gsurl$obj
+    bucket <- parse_gsurl$bucket
+  }
+
+  ## here as the bucket can be inferred from a gs URL
+  assertthat::assert_that(
+    is.character(bucket),
+    is.unit(bucket)
+    )
 
   object_name <- URLencode(object_name, reserved = TRUE)
 
@@ -90,10 +220,21 @@ gcs_get_object <- function(object_name,
     alt = "media"
   }
 
+  ## download directly to disk
+  if(!is.null(saveToDisk)){
+
+    assertthat::assert_that(is.logical(overwrite))
+
+    customConfig <- list(httr::write_disk(saveToDisk, overwrite = overwrite))
+  } else {
+    customConfig <- NULL
+  }
+
   ob <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
                                        path_args = list(b = bucket,
                                                         o = object_name),
-                                       pars_args = list(alt = alt))
+                                       pars_args = list(alt = alt),
+                                       customConfig = customConfig)
   req <- ob()
 
 
@@ -105,8 +246,6 @@ gcs_get_object <- function(object_name,
 
     if(!is.null(saveToDisk)){
 
-      bin <- httr::content(req, "raw")
-      writeBin(bin, saveToDisk)
       message("Saved ", object_name, " to ", saveToDisk)
       out <- TRUE
 
@@ -114,7 +253,10 @@ gcs_get_object <- function(object_name,
       message("Downloaded ", object_name)
 
       if(parseObject){
-        out <- gcs_parse_download(req)
+        out <- try(parseFunction(req))
+        if(is.error(out)){
+          stop("Problem parsing the object with supplied parseFunction.")
+        }
       } else {
         out <- req
       }
@@ -139,7 +281,7 @@ gcs_get_object <- function(object_name,
 #' @return Object metadata for uploading of class \code{gar_Object}
 #' @family object functions
 #' @export
-gcs_metadata_object <- function(object_name,
+gcs_metadata_object <- function(object_name = NULL,
                                 metadata = NULL,
                                 md5Hash = NULL,
                                 crc32c = NULL,
@@ -148,7 +290,13 @@ gcs_metadata_object <- function(object_name,
                                 contentDisposition = NULL,
                                 cacheControl = NULL){
 
-  object_name <- URLencode(object_name, reserved = TRUE)
+  parse_gsurl <- gcs_parse_gsurls(object_name)
+  if(!is.null(parse_gsurl)){
+    object_name <- parse_gsurl$obj
+    # bucket <- parse_gsurl$bucket
+  }
+
+  object_name <- if(!is.null(object_name)) URLencode(object_name, reserved = TRUE)
 
   out <- Object(name = object_name,
                 metadata = metadata,
@@ -180,10 +328,19 @@ gcs_metadata_object <- function(object_name,
 gcs_delete_object <- function(object_name,
                               bucket = gcs_get_global_bucket(),
                               generation = NULL){
-  testthat::expect_type(bucket, "character")
-  testthat::expect_type(object_name, "character")
-  testthat::expect_length(bucket, 1)
-  testthat::expect_length(object_name, 1)
+
+  assertthat::assert_that(
+    is.character(bucket),
+    is.unit(bucket),
+    is.character(object_name),
+    is.unit(object_name)
+  )
+
+  parse_gsurl <- gcs_parse_gsurls(object_name)
+  if(!is.null(parse_gsurl)){
+    object_name <- parse_gsurl$obj
+    bucket <- parse_gsurl$bucket
+  }
 
   object_name <- URLencode(object_name, reserved = TRUE)
 
@@ -238,64 +395,54 @@ gcs_delete_object <- function(object_name,
 #' @return Object object
 #'
 #' @family Object functions
-Object <- function(acl = NULL, bucket = NULL, cacheControl = NULL, componentCount = NULL, contentDisposition = NULL,
-                   contentEncoding = NULL, contentLanguage = NULL, contentType = NULL, crc32c = NULL,
-                   customerEncryption = NULL, etag = NULL, generation = NULL, id = NULL, md5Hash = NULL,
-                   mediaLink = NULL, metadata = NULL, metageneration = NULL, name = NULL, owner = NULL,
-                   selfLink = NULL, size = NULL, storageClass = NULL, timeCreated = NULL, timeDeleted = NULL,
+Object <- function(acl = NULL,
+                   bucket = NULL,
+                   cacheControl = NULL,
+                   componentCount = NULL,
+                   contentDisposition = NULL,
+                   contentEncoding = NULL,
+                   contentLanguage = NULL,
+                   contentType = NULL,
+                   crc32c = NULL,
+                   customerEncryption = NULL,
+                   etag = NULL,
+                   generation = NULL,
+                   id = NULL,
+                   md5Hash = NULL,
+                   mediaLink = NULL,
+                   metadata = NULL,
+                   metageneration = NULL,
+                   name = NULL,
+                   owner = NULL,
+                   selfLink = NULL,
+                   size = NULL,
+                   storageClass = NULL,
+                   timeCreated = NULL,
+                   timeDeleted = NULL,
                    updated = NULL) {
-  structure(list(acl = acl, bucket = bucket, cacheControl = cacheControl,
-                 componentCount = componentCount, contentDisposition = contentDisposition,
-                 contentEncoding = contentEncoding, contentLanguage = contentLanguage, contentType = contentType,
-                 crc32c = crc32c, customerEncryption = customerEncryption, etag = etag, generation = generation,
-                 id = id, kind = "storage#object", md5Hash = md5Hash, mediaLink = mediaLink,
-                 metadata = metadata, metageneration = metageneration, name = name, owner = owner,
-                 selfLink = selfLink, size = size, storageClass = storageClass, timeCreated = timeCreated,
+  structure(list(acl = acl,
+                 bucket = bucket,
+                 cacheControl = cacheControl,
+                 componentCount = componentCount,
+                 contentDisposition = contentDisposition,
+                 contentEncoding = contentEncoding,
+                 contentLanguage = contentLanguage,
+                 contentType = contentType,
+                 crc32c = crc32c,
+                 customerEncryption = customerEncryption,
+                 etag = etag,
+                 generation = generation,
+                 id = id,
+                 kind = "storage#object",
+                 md5Hash = md5Hash,
+                 mediaLink = mediaLink,
+                 metadata = metadata,
+                 metageneration = metageneration,
+                 name = name,
+                 owner = owner,
+                 selfLink = selfLink,
+                 size = size,
+                 storageClass = storageClass,
+                 timeCreated = timeCreated,
                  timeDeleted = timeDeleted, updated = updated), class = "gar_Object")
 }
-
-# #' Stores a new object and metadata.
-# #'
-# #'
-# #' @param Object The \link{Object} object to pass to this method
-# #' @param bucket Name of the bucket in which to store the new object
-# #' @param contentEncoding If set, sets the contentEncoding property of the final object to this value
-# #' @param ifGenerationMatch Makes the operation conditional on whether the object's current generation matches the given value
-# #' @param ifGenerationNotMatch Makes the operation conditional on whether the object's current generation does not match the given value
-# #' @param ifMetagenerationMatch Makes the operation conditional on whether the object's current metageneration matches the given value
-# #' @param ifMetagenerationNotMatch Makes the operation conditional on whether the object's current metageneration does not match the given value
-# #' @param name Name of the object
-# #' @param predefinedAcl Apply a predefined set of access controls to this object
-# #' @param projection Set of properties to return
-# #' @importFrom googleAuthR gar_api_generator
-# #' @family Object functions
-# #' @export
-# objects.insert <- function(Object,
-#                            bucket,
-#                            contentEncoding = NULL,
-#                            ifGenerationMatch = NULL,
-#                            ifGenerationNotMatch = NULL,
-#                            ifMetagenerationMatch = NULL,
-#                            ifMetagenerationNotMatch = NULL,
-#                            name = NULL,
-#                            predefinedAcl = NULL,
-#                            projection = NULL) {
-#   url <- sprintf("https://www.googleapis.com/storage/v1/b/%s/o", bucket)
-#   # storage.objects.insert
-#   f <- gar_api_generator(url,
-#                          "POST",
-#                          pars_args = list(contentEncoding = contentEncoding,
-#                                           ifGenerationMatch = ifGenerationMatch,
-#                                           ifGenerationNotMatch = ifGenerationNotMatch,
-#                                           ifMetagenerationMatch = ifMetagenerationMatch,
-#                                           ifMetagenerationNotMatch = ifMetagenerationNotMatch,
-#                                           name = name,
-#                                           predefinedAcl = predefinedAcl,
-#                                           projection = projection),
-#                          data_parse_function = function(x) x)
-#
-#   stopifnot(inherits(Object, "gar_Object"))
-#
-#   f(the_body = Object)
-#
-# }

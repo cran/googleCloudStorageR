@@ -7,6 +7,7 @@ test_that("We can login", {
   skip_on_cran()
   ## requires pre-auth at /tests/testthat/.httr-oauth
   ## or setting environment var GCS_AUTH_FILE and TRAVIS_GCS_AUTH_FILE
+  Sys.setenv(TRAVIS_GCS_AUTH_FILE = "auth.json")
   expect_is(gcs_auth(), "Token2.0")
 
 })
@@ -43,12 +44,25 @@ test_that("We can create a bucket", {
 
 })
 
-test_that("We can delete a bucket", {
+test_that("We can upload to the new bucket", {
   skip_on_cran()
-  deleted <- gcs_delete_bucket("blahblahblahfffff")
-  expect_true(deleted)
+
+  upload <- gcs_upload(mtcars, bucket = "blahblahblahfffff", name = "mtcars.csv")
+
+  expect_equal(class(upload), "gcs_objectmeta")
 
 })
+
+test_that("We can delete upload to the new bucket", {
+  skip_on_cran()
+
+  del <- gcs_delete_object("mtcars.csv", bucket = "blahblahblahfffff")
+
+  expect_true(del)
+
+})
+
+
 
 test_that("We can make a bucket with lifecycle and versioning set",{
   skip_on_cran()
@@ -69,12 +83,7 @@ test_that("We can make a bucket with lifecycle and versioning set",{
 
 })
 
-test_that("We can delete the lifecycle bucket", {
-  skip_on_cran()
-  deleted <- gcs_delete_bucket("blahblahblahffflifecycle")
-  expect_true(deleted)
 
-})
 
 context("Uploading")
 
@@ -122,7 +131,7 @@ test_that("We can upload using resumable", {
 
 test_that("We can upload with metadata", {
   skip_on_cran()
-  meta <- gcs_metadata_object("mtcars_meta.csv", metadata = list(blah = 1,bo = 2))
+  meta <- gcs_metadata_object("mtcars_meta.csv", metadata = list("Content-Language" = "en", blah = 2))
   upload <- gcs_upload(mtcars, object_metadata = meta)
   print(upload)
 
@@ -134,16 +143,43 @@ context("Downloading")
 
 test_that("We can download a file to disk", {
   skip_on_cran()
-  worked <- gcs_get_object("mtcars_meta.csv", saveToDisk = "mtcars.csv")
+  worked <- gcs_get_object("CONTRIBUTING.md", saveToDisk = "CONTRIBUTING.md", overwrite = TRUE)
   expect_true(worked)
-  unlink("mtcars.csv")
+  unlink("CONTRIBUTING.md")
 
 })
 
 test_that("We can download a file directly", {
   skip_on_cran()
-  dl <- gcs_get_object("mtcars_meta.csv")
+
+  dl <- suppressWarnings(gcs_get_object("tests/testthat/test_mtcars.csv"))
+
   expect_s3_class(dl, "data.frame")
+
+})
+
+test_that("We can supply our own parseFunction to downloads", {
+  skip_on_cran()
+  f <- function(object){
+    out <- suppressWarnings(httr::content(object, encoding = "UTF-8"))
+    message("Object parsed to class: ", paste(class(out), collapse = " "))
+    out
+  }
+
+  dl <- gcs_get_object("mtcars_meta.csv", parseFunction = f)
+  expect_s3_class(dl, "data.frame")
+
+})
+
+test_that("We can download via a gs:// link", {
+  skip_on_cran()
+
+  meta <- gcs_get_object("tests/testthat/test_mtcars.csv", meta = TRUE)
+  dl <- suppressWarnings(gcs_get_object("tests/testthat/test_mtcars.csv"))
+  gs <- suppressWarnings(gcs_get_object(paste0("gs://",meta$bucket,"/", meta$name)))
+
+  expect_equal(dl, gs)
+
 
 })
 
@@ -171,7 +207,7 @@ test_that("We can create a download URL", {
 
 })
 
-test_that("We can see access control for allUsers,", {
+test_that("We can see access control for allUsers", {
   skip_on_cran()
   acl <- gcs_get_object_acl("mtcars.csv",
                             entity_type = "allUsers")
@@ -181,7 +217,7 @@ test_that("We can see access control for allUsers,", {
   expect_equal(acl$entity, "allUsers")
 })
 
-test_that("We can see access control for single test user,", {
+test_that("We can see access control for single test user", {
   skip_on_cran()
   acl <- gcs_get_object_acl("mtcars.csv",
                             entity = "joe@blogs.com")
@@ -190,13 +226,75 @@ test_that("We can see access control for single test user,", {
   expect_equal(acl$entity, "user-joe@blogs.com")
 })
 
+test_that("We can get bucket access data", {
+  skip_on_cran()
+  acl <- gcs_get_bucket_acl(entity_type = "project",
+                            entity = "viewers-1080525199262")
+  expect_equal(acl$kind, "storage#bucketAccessControl")
+
+})
+
+# test_that("We can set access control for test bucket", {
+#   skip_on_cran()
+#   acl <- gcs_create_bucket_acl("blahblahblahffflifecycle",
+#                                entity = "test@sunholo.com")
+#
+# })
+
 context("Meta data")
 
 test_that("We can see object meta data", {
   skip_on_cran()
-  meta_obj <- gcs_get_object("mtcars.csv", meta = TRUE)
+  meta_obj <- gcs_get_object("mtcars_meta.csv", meta = TRUE)
   print(meta_obj)
   expect_equal(meta_obj$kind, "storage#object")
+  expect_true(!is.null(meta_obj$metadata))
+})
+
+test_that("We can list objects", {
+  skip_on_cran()
+  obj_list <- gcs_list_objects()
+
+  print(obj_list)
+  expect_s3_class(obj_list, "data.frame")
+})
+
+test_that("We can list objects with a prefix", {
+  skip_on_cran()
+  obj_list <- gcs_list_objects(prefix = "man")
+
+  expect_s3_class(obj_list, "data.frame")
+
+})
+
+test_that("We can list objects with a prefix and delimiter", {
+  skip_on_cran()
+  obj_list <- gcs_list_objects(prefix = "man/", delimiter = "/")
+
+  expect_s3_class(obj_list, "data.frame")
+
+})
+
+context("Signed URLs")
+
+test_that("We can create a signed URL", {
+  skip_on_cran()
+
+  obj <- gcs_get_object("LICENSE", meta = TRUE)
+
+  ## hack to get the auth file where expected on Travis
+  Sys.setenv("GCS_AUTH_FILE" = Sys.getenv("TRAVIS_GCS_AUTH_FILE"))
+  signed <- gcs_signed_url(obj)
+
+  expect_true(is.character(signed))
+
+  temp <- tempfile()
+  on.exit(unlink(temp))
+
+  download.file(signed, destfile = temp)
+  ll <- readLines(temp)
+  expect_equal(ll[[1]], "YEAR: 2016")
+
 })
 
 context("R session functions")
@@ -229,7 +327,22 @@ test_that("We can save the R session", {
   saved <- gcs_save_image(file = ".RData_test")
   expect_true(saved)
   unlink(".RData_test")
+  Sys.sleep(5)
 })
+
+
+context("Source files")
+
+test_that("We can upload a source file", {
+  skip_on_cran()
+  cat("x <- 'hello world!'\nx", file = "example.R")
+  up <- gcs_upload("example.R")
+  expect_true(up$kind == "storage#object")
+  unlink("example.R")
+  Sys.sleep(5)
+
+})
+
 
 
 test_that("We can load the R session", {
@@ -244,17 +357,6 @@ test_that("We can load the R session", {
 
 })
 
-context("Source files")
-
-test_that("We can upload a source file", {
-  skip_on_cran()
-  cat("x <- 'hello world!'\nx", file = "example.R")
-  up <- gcs_upload("example.R")
-  expect_true(up$kind == "storage#object")
-  unlink("example.R")
-
-})
-
 test_that("We can source the uploaded file", {
   skip_on_cran()
   gcs_source("example.R")
@@ -263,6 +365,13 @@ test_that("We can source the uploaded file", {
 })
 
 context("Deleting")
+
+test_that("We can delete a bucket", {
+  skip_on_cran()
+  deleted <- gcs_delete_bucket("blahblahblahfffff")
+  expect_true(deleted)
+
+})
 
 test_that("We can delete all test files", {
   skip_on_cran()
@@ -274,6 +383,13 @@ test_that("We can delete all test files", {
   expect_true(gcs_delete_object("example.R"))
   expect_true(gcs_delete_object("gcs_save_test.RData"))
   expect_true(gcs_delete_object(".RData_test"))
+})
+
+test_that("We can delete the lifecycle bucket", {
+  skip_on_cran()
+  deleted <- gcs_delete_bucket("blahblahblahffflifecycle")
+  expect_true(deleted)
+
 })
 
 

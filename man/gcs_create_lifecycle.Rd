@@ -14,7 +14,7 @@ gcs_create_lifecycle(age = NULL, createdBefore = NULL,
 
 \item{numNewerVersions}{Deletes all newer versions of this object}
 
-\item{isLive}{If TRUE deletes all live objects, if FALSE delets all archived versions
+\item{isLive}{If TRUE deletes all live objects, if FALSE deletes all archived versions
 
 \code{numNewerVersions} and \code{isLive} works only for buckets with object versioning
 
@@ -33,4 +33,3 @@ Other bucket functions: \code{\link{gcs_create_bucket}},
   \code{\link{gcs_global_bucket}},
   \code{\link{gcs_list_buckets}}
 }
-
