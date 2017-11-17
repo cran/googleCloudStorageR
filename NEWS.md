@@ -1,4 +1,20 @@
-# 0.3.0
+# googleCloudStorageR 0.4.0
+
+## Major changes
+
+* Update Bucket storageClass to include `MULTI_REGIONAL`, `REGIONAL`, and `COLDLINE`
+* Fix bug where `gcs_load` wouldn't work if file name not ".RData"
+* Add `gcs_first` and `gcs_last` to autosave your file workspace to GCS
+* Better message feedback on file sizes
+* Add `gcs_save_all` and `gcs_load_all` which will zip, save/load and upload/download a directory
+* Add use of `_gcssave.yaml` file to control `gcs_first/last` behaviour
+* Allow passing a bucket object to functions that expect a bucket name (#76)
+* remove now unsupported travis environment argument
+* Add support for subscribing bucket changes to Google Pub/Sub
+
+# googleCloudStorageR 0.3.0
+
+## Major changes
 
 * Correct metadata upload (#55 - thanks AndrewMarritt)
 * Let `gcs_object_metaname` not require name so it can be reused (#56 - thanks seandavi)
@@ -13,7 +29,9 @@
 * `gcs_get_object` now supports downloads over 2GB (#69)
 * Add support for signed URLs (#54 - thanks seandavi)
 
-# 0.2.0
+# googleCloudStorageR 0.2.0
+
+## Major changes
 
 * Fix bug where you can't rename objects via name in `gcs_upload`
 * Add `gcs_save` to store R session data in cloud
@@ -32,6 +50,8 @@
 * Add versioning and lifecycle management to create and update bucket functions
 
 # googleCloudStorageR 0.1.0
+
+## Major changes
 
 Initial release
 

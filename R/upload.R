@@ -79,7 +79,11 @@
 #'
 #'
 #'
-#' @import httr utils
+#' @importFrom httr add_headers upload_file
+#' @importFrom utils URLencode write.csv
+#' @importFrom jsonlite toJSON fromJSON
+#' @importFrom googleAuthR gar_api_generator
+#'
 #' @export
 gcs_upload <- function(file,
                        bucket = gcs_get_global_bucket(),
@@ -97,14 +101,15 @@ gcs_upload <- function(file,
                        ),
                        upload_type = c("simple","resumable")){
 
+  bucket        <- as.bucket_name(bucket)
   predefinedAcl <- match.arg(predefinedAcl)
-  upload_type <- match.arg(upload_type)
-  upload_limit <- 5000000
+  upload_type   <- match.arg(upload_type)
+  upload_limit  <- 5000000L
   ## so jsonlite::toJSON works
   if(!is.null(object_metadata)) class(object_metadata) <- "list"
 
   ## no leading slashes
-  name <- gsub("^/","", utils::URLencode(name, reserved = TRUE))
+  name <- gsub("^/","", URLencode(name, reserved = TRUE))
 
   if(inherits(file, "character")){
     # a filepath
@@ -149,7 +154,7 @@ gcs_upload <- function(file,
     temp <- tempfile(fileext = ".json")
     on.exit(unlink(temp))
 
-    write(jsonlite::toJSON(file), temp)
+    write(toJSON(file), temp)
 
     name <- if(!grepl("\\.json$", name)) paste0(name,".json") else name
 
@@ -158,10 +163,12 @@ gcs_upload <- function(file,
          write function using argument object_function")
   }
 
+  myMessage("File size detected as ",
+            format_object_size(file.size(temp), "auto"), level = 3)
+
   if(upload_type == "resumable" || file.size(temp) > upload_limit){
     ## resumable upload
     myMessage("Resumable upload", level = 2)
-    myMessage("File size detected as ", file.size(temp), level = 3)
 
     up <-
       googleAuthR::gar_api_generator("https://www.googleapis.com/upload/storage/v1",
@@ -172,8 +179,8 @@ gcs_upload <- function(file,
                                                       name=name,
                                                       predefinedAcl=predefinedAcl),
                                      customConfig = list(
-                                       httr::add_headers("X-Upload-Content-Type" = type),
-                                       httr::add_headers("X-Upload-Content-Length" = file.size(temp))
+                                       add_headers("X-Upload-Content-Type" = type),
+                                       add_headers("X-Upload-Content-Length" = file.size(temp))
 
                                      ))
 
@@ -191,10 +198,10 @@ gcs_upload <- function(file,
     }
 
     up2 <- PUTme(upload_url,
-                 body = httr::upload_file(temp, type = type))
+                 body = upload_file(temp, type = type))
 
     if(up2$status_code %in% c(200,201)){
-      out <- structure(jsonlite::fromJSON(content(up2, as ="text")), class = "gcs_objectmeta")
+      out <- structure(fromJSON(content(up2, as ="text")), class = "gcs_objectmeta")
     } else {
 
       message("File upload failed, trying to resume...")
@@ -230,25 +237,25 @@ gcs_upload <- function(file,
     on.exit(unlink(temp2))
 
     ## http://stackoverflow.com/questions/31080363/how-to-post-multipart-related-content-with-httr-for-google-drive-api
-    writeLines(jsonlite::toJSON(object_metadata, auto_unbox = TRUE), temp2)
+    writeLines(toJSON(object_metadata, auto_unbox = TRUE), temp2)
 
     bb <- list(
-      metadata = httr::upload_file(temp2, type = "application/json; charset=UTF-8"),
-      content = httr::upload_file(temp, type = type)
+      metadata = upload_file(temp2, type = "application/json; charset=UTF-8"),
+      content = upload_file(temp, type = type)
     )
 
     up <-
-      googleAuthR::gar_api_generator("https://www.googleapis.com/upload/storage/v1",
-                                     "POST",
-                                     path_args = list(b = "myBucket",
-                                                      o = ""),
-                                     pars_args = list(uploadType="multipart",
-                                                      name=name,
-                                                      predefinedAcl=predefinedAcl),
-                                     customConfig = list(
-                                       encode = "multipart",
-                                       httr::add_headers("Content-Type" =  "multipart/related")
-                                     ))
+      gar_api_generator("https://www.googleapis.com/upload/storage/v1",
+                        "POST",
+                        path_args = list(b = "myBucket",
+                                         o = ""),
+                        pars_args = list(uploadType="multipart",
+                                         name=name,
+                                         predefinedAcl=predefinedAcl),
+                        customConfig = list(
+                          encode = "multipart",
+                          httr::add_headers("Content-Type" =  "multipart/related")
+                        ))
 
     req <- up(path_arguments = list(b = bucket),
               pars_arguments = list(name = name),
@@ -261,13 +268,13 @@ gcs_upload <- function(file,
     myMessage("Simple upload", level = 2)
 
     up <-
-      googleAuthR::gar_api_generator("https://www.googleapis.com/upload/storage/v1",
-                                     "POST",
-                                     path_args = list(b = "myBucket",
-                                                      o = ""),
-                                     pars_args = list(uploadType="media",
-                                                      name=name,
-                                                      predefinedAcl=predefinedAcl))
+      gar_api_generator("https://www.googleapis.com/upload/storage/v1",
+                        "POST",
+                        path_args = list(b = "myBucket",
+                                         o = ""),
+                        pars_args = list(uploadType="media",
+                                         name=name,
+                                         predefinedAcl=predefinedAcl))
 
     req <- up(path_arguments = list(b = bucket),
               pars_arguments = list(name = name),
@@ -296,6 +303,7 @@ gcs_upload <- function(file,
 #'   the remaining bytes.
 #'
 #' @return If successful, an object metadata object, if not an gcs_upload_retry object.
+#' @import assertthat
 #' @export
 gcs_retry_upload <- function(retry_object=NULL, upload_url=NULL, file=NULL, type = NULL){
 
@@ -305,7 +313,7 @@ gcs_retry_upload <- function(retry_object=NULL, upload_url=NULL, file=NULL, type
     }
   } else {
 
-    assertthat::assert_that(inherits(retry_object, "gcs_upload_retry"))
+    assert_that(inherits(retry_object, "gcs_upload_retry"))
 
     upload_url <- retry_object$upload_url
     file <- retry_object$file
@@ -372,10 +380,12 @@ gcs_retry_upload <- function(retry_object=NULL, upload_url=NULL, file=NULL, type
   out
 }
 
+#' @noRd
+#' @importFrom httr PUT verbose
 PUTme <- function(...){
   if(getOption("googleAuthR.verbose") < 3){
-    httr::PUT(..., httr::verbose())
+    PUT(..., verbose())
   } else {
-    httr::PUT(...)
+    PUT(...)
   }
 }

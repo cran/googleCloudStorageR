@@ -73,3 +73,4 @@ Object Object
 \details{
 An object.
 }
+\keyword{internal}

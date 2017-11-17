@@ -17,7 +17,7 @@ gcs_save(..., file, bucket = gcs_get_global_bucket(),
 \item{envir}{Environment to search for objects to be saved}
 }
 \value{
-TRUE if successful
+The GCS object
 }
 \description{
 Performs \link{save} then saves it to Google Cloud Storage.
@@ -35,5 +35,6 @@ This will overwrite any data within your local environment with the same name.
 }
 \seealso{
 Other R session data functions: \code{\link{gcs_load}},
-  \code{\link{gcs_save_image}}, \code{\link{gcs_source}}
+  \code{\link{gcs_save_all}}, \code{\link{gcs_save_image}},
+  \code{\link{gcs_source}}
 }

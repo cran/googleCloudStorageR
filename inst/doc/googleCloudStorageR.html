@@ -12,7 +12,7 @@
 
 <meta name="author" content="Mark Edmondson" />
 
-<meta name="date" content="2017-05-27" />
+<meta name="date" content="2017-11-17" />
 
 <title>googleCloudStorageR</title>
 
@@ -70,7 +70,7 @@ code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Inf
 
 <h1 class="title toc-ignore">googleCloudStorageR</h1>
 <h4 class="author"><em>Mark Edmondson</em></h4>
-<h4 class="date"><em>2017-05-27</em></h4>
+<h4 class="date"><em>2017-11-17</em></h4>
 
 
 
@@ -155,15 +155,15 @@ bucket &lt;-<span class="st"> &quot;your-bucket&quot;</span>
 bucket_info &lt;-<span class="st"> </span><span class="kw">gcs_get_bucket</span>(bucket)
 bucket_info
 
-==Google Cloud Storage Bucket==
-Bucket:<span class="st">          </span>your-bucket 
-Project Number:<span class="st">  </span><span class="dv">1123123123</span> 
-Location:<span class="st">        </span>EU 
-Class:<span class="st">           </span>STANDARD 
-Created:<span class="st">         </span><span class="dv">2016-04-28</span> <span class="dv">11</span>:<span class="dv">39</span>:<span class="dv">06</span> 
-Updated:<span class="st">         </span><span class="dv">2016-04-28</span> <span class="dv">11</span>:<span class="dv">39</span>:<span class="dv">06</span> 
-Meta-generation:<span class="st"> </span><span class="dv">1</span> 
-eTag:<span class="st">            </span>Cxx=
+<span class="op">==</span>Google Cloud Storage Bucket<span class="op">==</span>
+Bucket<span class="op">:</span><span class="st">          </span>your<span class="op">-</span>bucket 
+Project Number<span class="op">:</span><span class="st">  </span><span class="dv">1123123123</span> 
+Location<span class="op">:</span><span class="st">        </span>EU 
+Class<span class="op">:</span><span class="st">           </span>STANDARD 
+Created<span class="op">:</span><span class="st">         </span><span class="dv">2016</span><span class="op">-</span><span class="dv">04</span><span class="op">-</span><span class="dv">28</span> <span class="dv">11</span><span class="op">:</span><span class="dv">39</span><span class="op">:</span><span class="dv">06</span> 
+Updated<span class="op">:</span><span class="st">         </span><span class="dv">2016</span><span class="op">-</span><span class="dv">04</span><span class="op">-</span><span class="dv">28</span> <span class="dv">11</span><span class="op">:</span><span class="dv">39</span><span class="op">:</span><span class="dv">06</span> 
+Meta<span class="op">-</span>generation<span class="op">:</span><span class="st"> </span><span class="dv">1</span> 
+eTag<span class="op">:</span><span class="st">            </span>Cxx=
 
 
 ## get object info in the default bucket
@@ -171,16 +171,16 @@ objects &lt;-<span class="st"> </span><span class="kw">gcs_list_objects</span>()
 
 ## save directly to an R object (warning, don't run out of RAM if its a big object)
 ## the download type is guessed into an appropriate R object
-parsed_download &lt;-<span class="st"> </span><span class="kw">gcs_get_object</span>(objects$name[[<span class="dv">1</span>]])
+parsed_download &lt;-<span class="st"> </span><span class="kw">gcs_get_object</span>(objects<span class="op">$</span>name[[<span class="dv">1</span>]])
 
 ## if you want to do your own parsing, set parseObject to FALSE
 ## use httr::content() to parse afterwards
-raw_download &lt;-<span class="st"> </span><span class="kw">gcs_get_object</span>(objects$name[[<span class="dv">1</span>]], 
+raw_download &lt;-<span class="st"> </span><span class="kw">gcs_get_object</span>(objects<span class="op">$</span>name[[<span class="dv">1</span>]], 
                                <span class="dt">parseObject =</span> <span class="ot">FALSE</span>)
 
 ## save directly to a file in your working directory
 ## parseObject has no effect, it is a httr::content(req, &quot;raw&quot;) download
-<span class="kw">gcs_get_object</span>(objects$name[[<span class="dv">1</span>]], <span class="dt">saveToDisk =</span> <span class="st">&quot;csv_downloaded.csv&quot;</span>)</code></pre></div>
+<span class="kw">gcs_get_object</span>(objects<span class="op">$</span>name[[<span class="dv">1</span>]], <span class="dt">saveToDisk =</span> <span class="st">&quot;csv_downloaded.csv&quot;</span>)</code></pre></div>
 </div>
 </div>
 <div id="uploading-objects-5mb" class="section level2">
@@ -200,7 +200,7 @@ raw_download &lt;-<span class="st"> </span><span class="kw">gcs_get_object</span
 ## upload an R data.frame directly, with a custom function
 ## function should have arguments 'input' and 'output'
 ## safest to supply type too
-f &lt;-<span class="st"> </span>function(input, output) <span class="kw">write.csv</span>(input, <span class="dt">row.names =</span> <span class="ot">FALSE</span>, <span class="dt">file =</span> output)
+f &lt;-<span class="st"> </span><span class="cf">function</span>(input, output) <span class="kw">write.csv</span>(input, <span class="dt">row.names =</span> <span class="ot">FALSE</span>, <span class="dt">file =</span> output)
 
 <span class="kw">gcs_upload</span>(mtcars, 
            <span class="dt">object_function =</span> f,
@@ -230,31 +230,31 @@ upload_try &lt;-<span class="st"> </span><span class="kw">gcs_upload</span>(big_
 
 ## if successful, upload_try is an object metadata object
 upload_try
-==Google Cloud Storage Object==
-Name:<span class="st">            &quot;big_filename.csv&quot;</span> 
-Size:<span class="st">            </span><span class="fl">8.5</span> Gb 
-Media URL        https:<span class="er">//</span>www.googleapis.com/download/storage/v1/b/xxxx 
-Bucket:<span class="st">          </span>your-bucket 
-ID:<span class="st">              </span>your-bucket/<span class="st">&quot;test.pdf&quot;</span>/xxxx
-MD5 Hash:<span class="st">        </span>rshao1nxxxxxY68JZQ==<span class="st"> </span>
-Class:<span class="st">           </span>STANDARD 
-Created:<span class="st">         </span><span class="dv">2016-08-12</span> <span class="dv">17</span>:<span class="dv">33</span>:<span class="dv">05</span> 
-Updated:<span class="st">         </span><span class="dv">2016-08-12</span> <span class="dv">17</span>:<span class="dv">33</span>:<span class="dv">05</span> 
-Generation:<span class="st">      </span><span class="dv">1471023185977000</span> 
-Meta Generation:<span class="st"> </span><span class="dv">1</span> 
-eTag:<span class="st">            </span>CKi90xxxxxEAE=<span class="st"> </span>
-crc32c:<span class="st">          </span>j4i1sQ==<span class="st"> </span>
+<span class="op">==</span>Google Cloud Storage Object<span class="op">==</span>
+Name<span class="op">:</span><span class="st">            &quot;big_filename.csv&quot;</span> 
+Size<span class="op">:</span><span class="st">            </span><span class="fl">8.5</span> Gb 
+Media URL        https<span class="op">:</span><span class="er">//</span>www.googleapis.com<span class="op">/</span>download<span class="op">/</span>storage<span class="op">/</span>v1<span class="op">/</span>b<span class="op">/</span>xxxx 
+Bucket<span class="op">:</span><span class="st">          </span>your<span class="op">-</span>bucket 
+ID<span class="op">:</span><span class="st">              </span>your<span class="op">-</span>bucket<span class="op">/</span><span class="st">&quot;test.pdf&quot;</span><span class="op">/</span>xxxx
+MD5 Hash<span class="op">:</span><span class="st">        </span>rshao1nxxxxxY68JZQ<span class="op">==</span><span class="st"> </span>
+Class<span class="op">:</span><span class="st">           </span>STANDARD 
+Created<span class="op">:</span><span class="st">         </span><span class="dv">2016</span><span class="op">-</span><span class="dv">08</span><span class="op">-</span><span class="dv">12</span> <span class="dv">17</span><span class="op">:</span><span class="dv">33</span><span class="op">:</span><span class="dv">05</span> 
+Updated<span class="op">:</span><span class="st">         </span><span class="dv">2016</span><span class="op">-</span><span class="dv">08</span><span class="op">-</span><span class="dv">12</span> <span class="dv">17</span><span class="op">:</span><span class="dv">33</span><span class="op">:</span><span class="dv">05</span> 
+Generation<span class="op">:</span><span class="st">      </span><span class="dv">1471023185977000</span> 
+Meta Generation<span class="op">:</span><span class="st"> </span><span class="dv">1</span> 
+eTag<span class="op">:</span><span class="st">            </span>CKi90xxxxxEAE=<span class="st"> </span>
+crc32c<span class="op">:</span><span class="st">          </span>j4i1sQ<span class="op">==</span><span class="st"> </span>
 
 
 ## if unsuccessful after 3 retries, upload_try is a Retry object
-<span class="er">==</span>Google Cloud Storage Upload Retry Object==
-File Location:<span class="st">     </span>big_filename.csv
-Retry Upload URL:<span class="st">  </span>http:<span class="er">//</span>xxxx
-Created:<span class="st">           </span><span class="dv">2016-08-12</span> <span class="dv">17</span>:<span class="dv">33</span>:<span class="dv">05</span> 
-Type:<span class="st">              </span>csv
-File Size:<span class="st">        </span><span class="fl">8.5</span> Gb
-Upload Byte:<span class="st">      </span><span class="dv">4343</span>
-Upload remaining:<span class="st"> </span><span class="fl">8.1</span> Gb
+<span class="er">==</span>Google Cloud Storage Upload Retry Object<span class="op">==</span>
+File Location<span class="op">:</span><span class="st">     </span>big_filename.csv
+Retry Upload URL<span class="op">:</span><span class="st">  </span>http<span class="op">:</span><span class="er">//</span>xxxx
+Created<span class="op">:</span><span class="st">           </span><span class="dv">2016</span><span class="op">-</span><span class="dv">08</span><span class="op">-</span><span class="dv">12</span> <span class="dv">17</span><span class="op">:</span><span class="dv">33</span><span class="op">:</span><span class="dv">05</span> 
+Type<span class="op">:</span><span class="st">              </span>csv
+File Size<span class="op">:</span><span class="st">        </span><span class="fl">8.5</span> Gb
+Upload Byte<span class="op">:</span><span class="st">      </span><span class="dv">4343</span>
+Upload remaining<span class="op">:</span><span class="st"> </span><span class="fl">8.1</span> Gb
 
 ## you can retry to upload the remaining data using gcs_retry_upload()
 try2 &lt;-<span class="st"> </span><span class="kw">gcs_retry_upload</span>(upload_try)</code></pre></div>
@@ -293,13 +293,13 @@ try2 &lt;-<span class="st"> </span><span class="kw">gcs_retry_upload</span>(uplo
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## default entity_type is user
 acl &lt;-<span class="st"> </span><span class="kw">gcs_get_object_acl</span>(<span class="st">&quot;your-object.csv&quot;</span>, 
                          <span class="dt">entity =</span> <span class="st">&quot;joe@blogs.com&quot;</span>)
-acl$role 
+acl<span class="op">$</span>role 
 [<span class="dv">1</span>] <span class="st">&quot;OWNER&quot;</span>
 
 ## for allUsers and allAuthenticated users, you don't need to supply entity
 acl &lt;-<span class="st"> </span><span class="kw">gcs_get_object_acl</span>(<span class="st">&quot;your-object.csv&quot;</span>, 
                           <span class="dt">entity_type =</span> <span class="st">&quot;allUsers&quot;</span>)
-acl$role 
+acl<span class="op">$</span>role 
 [<span class="dv">1</span>] <span class="st">&quot;READER&quot;</span></code></pre></div>
 </div>
 <div id="creating-download-links" class="section level3">
@@ -331,9 +331,9 @@ d &lt;-<span class="st"> &quot;test1&quot;</span>
 
 ## load them back in from GCS
 <span class="kw">gcs_load</span>(<span class="dt">file =</span> <span class="st">&quot;gcs_save_test.RData&quot;</span>)
-cc ==<span class="st"> </span><span class="dv">3</span>
+cc <span class="op">==</span><span class="st"> </span><span class="dv">3</span>
 [<span class="dv">1</span>] <span class="ot">TRUE</span>
-d ==<span class="st"> &quot;test1&quot;</span>
+d <span class="op">==</span><span class="st"> &quot;test1&quot;</span>
 [<span class="dv">1</span>] <span class="ot">TRUE</span></code></pre></div>
 <p>You can also upload <code>.R</code> code files and source them directly using <code>gcs_source</code>:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">## make a R source file and upload it
@@ -368,39 +368,39 @@ x
 <span class="kw">shinyApp</span>(
   <span class="dt">ui =</span> <span class="kw">shinyUI</span>(
       <span class="kw">fluidPage</span>(
-        googleAuthR::<span class="kw">googleAuthUI</span>(<span class="st">&quot;login&quot;</span>),
+        googleAuthR<span class="op">::</span><span class="kw">googleAuthUI</span>(<span class="st">&quot;login&quot;</span>),
         <span class="kw">fileInput</span>(<span class="st">&quot;picture&quot;</span>, <span class="st">&quot;picture&quot;</span>),
         <span class="kw">textInput</span>(<span class="st">&quot;filename&quot;</span>, <span class="dt">label =</span> <span class="st">&quot;Name on Google Cloud Storage&quot;</span>,<span class="dt">value =</span> <span class="st">&quot;myObject&quot;</span>),
         <span class="kw">actionButton</span>(<span class="st">&quot;submit&quot;</span>, <span class="st">&quot;submit&quot;</span>),
         <span class="kw">textOutput</span>(<span class="st">&quot;meta_file&quot;</span>)
       )
   ),
-  <span class="dt">server =</span> <span class="kw">shinyServer</span>(function(input, output, session){
+  <span class="dt">server =</span> <span class="kw">shinyServer</span>(<span class="cf">function</span>(input, output, session){
 
-    access_token &lt;-<span class="st"> </span>shiny::<span class="kw">callModule</span>(googleAuth, <span class="st">&quot;login&quot;</span>)
+    access_token &lt;-<span class="st"> </span>shiny<span class="op">::</span><span class="kw">callModule</span>(googleAuth, <span class="st">&quot;login&quot;</span>)
 
-    meta &lt;-<span class="st"> </span><span class="kw">eventReactive</span>(input$submit, {
+    meta &lt;-<span class="st"> </span><span class="kw">eventReactive</span>(input<span class="op">$</span>submit, {
 
       <span class="kw">message</span>(<span class="st">&quot;Uploading to Google Cloud Storage&quot;</span>)
       
       <span class="co"># from googleCloudStorageR</span>
       <span class="kw">with_shiny</span>(gcs_upload,  
-                 <span class="dt">file =</span> input$picture$datapath,
+                 <span class="dt">file =</span> input<span class="op">$</span>picture<span class="op">$</span>datapath,
                  <span class="co"># enter your bucket name here</span>
                  <span class="dt">bucket =</span> <span class="st">&quot;gogauth-test&quot;</span>,  
-                 <span class="dt">type =</span> input$picture$type,
-                 <span class="dt">name =</span> input$filename,
+                 <span class="dt">type =</span> input<span class="op">$</span>picture<span class="op">$</span>type,
+                 <span class="dt">name =</span> input<span class="op">$</span>filename,
                  <span class="dt">shiny_access_token =</span> <span class="kw">access_token</span>())
 
     })
 
-    output$meta_file &lt;-<span class="st"> </span><span class="kw">renderText</span>({
+    output<span class="op">$</span>meta_file &lt;-<span class="st"> </span><span class="kw">renderText</span>({
       
       <span class="kw">req</span>(<span class="kw">meta</span>())
 
       <span class="kw">str</span>(<span class="kw">meta</span>())
 
-      <span class="kw">paste</span>(<span class="st">&quot;Uploaded: &quot;</span>, <span class="kw">meta</span>()$name)
+      <span class="kw">paste</span>(<span class="st">&quot;Uploaded: &quot;</span>, <span class="kw">meta</span>()<span class="op">$</span>name)
 
     })
 

@@ -4,6 +4,7 @@
 #'
 #' @param file Where to save the file in GCS and locally
 #' @param bucket Bucket to store objects in
+#' @param saveLocation Which folder in the bucket to save file
 #' @param envir Environment to save from
 #'
 #' @details
@@ -16,18 +17,23 @@
 #' This will overwrite any data with the same name in your current local environment.
 #'
 #' @family R session data functions
-#' @return TRUE if successful
+#' @return The GCS object
 #' @export
 gcs_save_image <- function(file = ".RData",
                            bucket = gcs_get_global_bucket(),
+                           saveLocation = NULL,
                            envir = parent.frame()){
+
+  if(!is.null(saveLocation)){
+    file <- paste0(saveLocation, "/", file)
+  }
+
+  bucket <- as.bucket_name(bucket)
 
   gcs_save(list = ls(all.names = TRUE, envir = envir),
            file = file,
            bucket = bucket,
            envir = envir)
-
-  TRUE
 
 }
 
@@ -53,7 +59,7 @@ gcs_save_image <- function(file = ".RData",
 #' This will overwrite any data within your local environment with the same name.
 #'
 #' @family R session data functions
-#' @return TRUE if successful
+#' @return The GCS object
 #' @export
 gcs_save <- function(...,
                      file,
@@ -63,11 +69,11 @@ gcs_save <- function(...,
   tmp <- tempfile()
   on.exit(unlink(tmp))
 
+  bucket <- as.bucket_name(bucket)
+
   save(..., file = tmp, envir = envir)
 
   gcs_upload(tmp, bucket = bucket, name = file)
-
-  TRUE
 
 }
 
@@ -80,6 +86,7 @@ gcs_save <- function(...,
 #' @param bucket Bucket the stored objects are in
 #' @param envir Environment to load objects into
 #' @param saveToDisk Where to save the loaded file.  Default same file name
+#' @param overwrite If file exists, overwrite. Default TRUE.
 #'
 #' @details
 #'
@@ -95,10 +102,14 @@ gcs_save <- function(...,
 gcs_load <- function(file = ".RData",
                      bucket = gcs_get_global_bucket(),
                      envir = .GlobalEnv,
-                     saveToDisk = file){
+                     saveToDisk = file,
+                     overwrite = TRUE){
 
-  gcs_get_object(file, bucket = bucket, saveToDisk = saveToDisk)
-  load(file, envir = envir)
+  bucket <- as.bucket_name(bucket)
+
+  gcs_get_object(file, bucket = bucket,
+                 saveToDisk = saveToDisk, overwrite = overwrite)
+  load(saveToDisk, envir = envir)
 
   TRUE
 }
@@ -113,6 +124,7 @@ gcs_load <- function(file = ".RData",
 #'
 #' @family R session data functions
 #' @return TRUE if successful
+#' @import assertthat
 #' @export
 gcs_source <- function(script,
                        bucket = gcs_get_global_bucket(),
@@ -121,9 +133,105 @@ gcs_source <- function(script,
   file <- tempfile(fileext = ".R")
   on.exit(unlink(file))
 
+  bucket <- as.bucket_name(bucket)
+
   gcs_get_object(script, bucket = bucket, saveToDisk = file)
 
-  assertthat::assert_that(assertthat::is.readable(file))
+  assert_that(is.readable(file))
 
   source(file, ...)
+}
+
+#' Save/Load all files in directory to Google Cloud Storage
+#'
+#' This function takes all the files in the directory, zips them, and saves/loads/deletes them to the cloud.  The upload name will be the directory name.
+#'
+#' @param directory The folder to upload/download
+#' @param bucket Bucket to store within
+#' @param pattern An optional regular expression. Only file names which match the regular expression will be saved.
+#' @param exdir When downloading, specify a destination directory if required
+#' @param list When downloading, only list where the files would unzip to
+#'
+#' @details
+#'
+#' Zip/unzip is performed before upload and after download.
+#'
+#'
+#' @return When uploading the GCS meta object; when downloading \code{TRUE} if successful
+#'
+#' @export
+#' @importFrom zip zip
+#' @family R session data functions
+gcs_save_all <- function(directory = getwd(),
+                         bucket = gcs_get_global_bucket(),
+                         pattern = ""){
+
+  tmp <- tempfile(fileext = ".zip")
+  on.exit(unlink(tmp))
+
+  bucket <- as.bucket_name(bucket)
+
+  the_files <- file.path(directory,
+                         list.files(path = directory,
+                                    all.files = TRUE,
+                                    recursive = TRUE,
+                                    pattern = pattern))
+
+  zip::zip(tmp, files = the_files)
+
+  gcs_upload(tmp, bucket = bucket, name = directory)
+
+}
+
+#' @export
+#' @rdname gcs_save_all
+#' @importFrom utils unzip
+gcs_load_all <- function(directory = getwd(),
+                         bucket = gcs_get_global_bucket(),
+                         exdir = directory,
+                         list = FALSE){
+  tmp <- tempfile(fileext = ".zip")
+  on.exit(unlink(tmp))
+
+  bucket <- as.bucket_name(bucket)
+
+  gcs_get_object(directory, bucket = bucket, saveToDisk = tmp)
+
+  tmp2 <- tempdir()
+  on.exit(unlink(tmp2))
+
+  unzipped <- unzip(tmp, exdir = tmp2)
+
+  new_files <- gsub(directory,exdir,gsub(tmp2, "", unzipped))
+
+  if(list){
+    return(new_files)
+  }
+
+  mapply(function(x, name){
+    suppressWarnings(file.copy(x, name,
+                               overwrite = FALSE,
+                               recursive = TRUE,
+                               copy.date = TRUE))
+  }, unzipped, new_files)
+
+  TRUE
+
+}
+
+#' @export
+#' @rdname gcs_save_all
+gcs_delete_all <- function(directory = getwd(),
+                           bucket = gcs_get_global_bucket()){
+
+  bucket <- as.bucket_name(bucket)
+
+  o <- gcs_list_objects(bucket, prefix = directory)
+
+  if(!is.null(o$name) && directory %in% o$name){
+    gcs_delete_object(o$name, bucket = bucket)
+  } else {
+    message("No files found to delete for ", directory, " in ", bucket)
+  }
+
 }

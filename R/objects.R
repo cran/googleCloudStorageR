@@ -34,10 +34,7 @@ gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
 
   detail <- match.arg(detail)
 
-  assertthat::assert_that(
-    is.character(bucket),
-    is.unit(bucket)
-  )
+  bucket <- as.bucket_name(bucket)
 
   pars <- list(prefix = prefix,
                delimiter = delimiter)
@@ -55,7 +52,7 @@ gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
     npt <- attr(req, "nextPageToken")
 
     while(!is.null(npt)){
-      myMessage("Paging through results: ", npt, level = 3)
+      myMessage("Paging through results...", level = 3)
       lo2 <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
                                             path_args = list(b = bucket,
                                                              o = ""),
@@ -73,7 +70,8 @@ gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
   if(nrow(req) > 0){
     out_names <- switch(detail,
                         summary = c("name", "size", "updated"),
-                        more = c("name", "size", "bucket", "contentType", "timeCreated", "updated", "storageClass"),
+                        more = c("name", "size", "bucket", "contentType",
+                                 "timeCreated", "updated", "storageClass"),
                         full = TRUE
     )
     req[,out_names]
@@ -101,6 +99,10 @@ parse_lo <- function(x){
   x$updated <- timestamp_to_r(x$updated)
   x$kind <- NULL
   x$size <- vapply(as.numeric(x$size), function(x) format_object_size(x, "auto"), character(1))
+
+  ## extra columns for composite objects (#73)
+  x$componentCount  <- if(is.null(x$componentCount)) NA else x$componentCount
+  x$contentLanguage <- if(is.null(x$contentLanguage)) NA else x$contentLanguage
 
   attr(x, "nextPageToken") <- nextPageToken
   attr(x, "prefixes") <- prefixes
@@ -182,6 +184,10 @@ gcs_parse_gsurls <- function(gsurl){
 #' }
 #'
 #' @family object functions
+#' @importFrom utils URLdecode
+#' @import assertthat
+#' @importFrom httr write_disk
+#' @importFrom googleAuthR gar_api_generator
 #' @export
 gcs_get_object <- function(object_name,
                            bucket = gcs_get_global_bucket(),
@@ -191,11 +197,10 @@ gcs_get_object <- function(object_name,
                            parseObject = TRUE,
                            parseFunction = gcs_parse_download){
 
-  assertthat::assert_that(
-    is.character(object_name),
-    is.unit(object_name),
-    is.logical(meta),
-    is.logical(parseObject)
+  assert_that(
+    is.string(object_name),
+    is.flag(meta),
+    is.flag(parseObject)
   )
 
   parse_gsurl <- gcs_parse_gsurls(object_name)
@@ -204,11 +209,7 @@ gcs_get_object <- function(object_name,
     bucket <- parse_gsurl$bucket
   }
 
-  ## here as the bucket can be inferred from a gs URL
-  assertthat::assert_that(
-    is.character(bucket),
-    is.unit(bucket)
-    )
+  bucket <- as.bucket_name(bucket)
 
   object_name <- URLencode(object_name, reserved = TRUE)
 
@@ -223,18 +224,18 @@ gcs_get_object <- function(object_name,
   ## download directly to disk
   if(!is.null(saveToDisk)){
 
-    assertthat::assert_that(is.logical(overwrite))
+    assert_that(is.logical(overwrite))
 
-    customConfig <- list(httr::write_disk(saveToDisk, overwrite = overwrite))
+    customConfig <- list(write_disk(saveToDisk, overwrite = overwrite))
   } else {
     customConfig <- NULL
   }
 
-  ob <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
-                                       path_args = list(b = bucket,
-                                                        o = object_name),
-                                       pars_args = list(alt = alt),
-                                       customConfig = customConfig)
+  ob <- gar_api_generator("https://www.googleapis.com/storage/v1/",
+                          path_args = list(b = bucket,
+                                           o = object_name),
+                          pars_args = list(alt = alt),
+                          customConfig = customConfig)
   req <- ob()
 
 
@@ -246,7 +247,10 @@ gcs_get_object <- function(object_name,
 
     if(!is.null(saveToDisk)){
 
-      message("Saved ", object_name, " to ", saveToDisk)
+      myMessage("Saved ", URLdecode(object_name), " to ", saveToDisk,
+                " (",format_object_size(file.size(saveToDisk), "auto"),")",
+                level = 3)
+
       out <- TRUE
 
     } else {
@@ -293,7 +297,6 @@ gcs_metadata_object <- function(object_name = NULL,
   parse_gsurl <- gcs_parse_gsurls(object_name)
   if(!is.null(parse_gsurl)){
     object_name <- parse_gsurl$obj
-    # bucket <- parse_gsurl$bucket
   }
 
   object_name <- if(!is.null(object_name)) URLencode(object_name, reserved = TRUE)
@@ -324,16 +327,15 @@ gcs_metadata_object <- function(object_name = NULL,
 #'
 #' @return If successful, TRUE.
 #' @family object functions
+#' @import assertthat
+#' @importFrom googleAuthR gar_api_generator
 #' @export
 gcs_delete_object <- function(object_name,
                               bucket = gcs_get_global_bucket(),
                               generation = NULL){
 
-  assertthat::assert_that(
-    is.character(bucket),
-    is.unit(bucket),
-    is.character(object_name),
-    is.unit(object_name)
+  assert_that(
+    is.string(object_name)
   )
 
   parse_gsurl <- gcs_parse_gsurls(object_name)
@@ -342,16 +344,18 @@ gcs_delete_object <- function(object_name,
     bucket <- parse_gsurl$bucket
   }
 
+  bucket <- as.bucket_name(bucket)
+
   object_name <- URLencode(object_name, reserved = TRUE)
 
   pars <- list(generation = generation)
   pars <- rmNullObs(pars)
 
-  ob <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
-                                       "DELETE",
-                                       path_args = list(b = bucket,
-                                                        o = object_name),
-                                       pars_args = pars)
+  ob <- gar_api_generator("https://www.googleapis.com/storage/v1/",
+                          "DELETE",
+                          path_args = list(b = bucket,
+                                           o = object_name),
+                          pars_args = pars)
 
   ## suppress warnings of no JSON content detected
   suppressWarnings(ob())
@@ -395,6 +399,7 @@ gcs_delete_object <- function(object_name,
 #' @return Object object
 #'
 #' @family Object functions
+#' @keywords internal
 Object <- function(acl = NULL,
                    bucket = NULL,
                    cacheControl = NULL,
