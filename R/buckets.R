@@ -13,12 +13,14 @@ is.gcs_bucket <- function(x){
 #' @noRd
 #' @import assertthat
 as.bucket_name <- function(x){
+  
   if(is.gcs_bucket(x)){
     out <- x$name
-  } else if(is.string(x)){
+  } else if(is.string(x) && x != ""){ 
+    x <- gsub("^gs://", "", x) #remove prefix if one exists
     out <- x
   } else {
-    stop("Passed bucket is not gcs_bucket or bucket name string", call. = FALSE)
+    stop("Bucket name is invalid", call. = FALSE)
   }
 
   assert_that(is.string(out))
@@ -356,6 +358,18 @@ gcs_delete_bucket <- function(bucket,
 #' @export
 #' @import assertthat
 #' @family bucket functions
+#' @examples 
+#' \dontrun{
+#'   lifecycle <- gcs_create_lifecycle(age = 30)
+#'   
+#'   gcs_create_bucket("your-bucket-lifecycle",
+#'                      projectId = "your-project",
+#'                      location = "EUROPE-NORTH1",
+#'                      storageClass = "REGIONAL",
+#'                      lifecycle = list(lifecycle))
+#' 
+#' 
+#' }
 gcs_create_lifecycle <- function(age = NULL,
                                  createdBefore = NULL,
                                  numNewerVersions = NULL,

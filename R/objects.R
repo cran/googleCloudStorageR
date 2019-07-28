@@ -27,6 +27,7 @@
 #'
 #' @family object functions
 #' @export
+#' @importFrom googleAuthR gar_api_generator gar_api_page
 gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
                              detail = c("summary","more","full"),
                              prefix = NULL,
@@ -37,48 +38,37 @@ gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
   bucket <- as.bucket_name(bucket)
 
   pars <- list(prefix = prefix,
-               delimiter = delimiter)
+               delimiter = delimiter,
+               pageToken = "")
   pars <- rmNullObs(pars)
 
-  lo <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
-                                      path_args = list(b = bucket,
-                                                       o = ""),
-                                      pars_args = pars,
-                                      data_parse_function = parse_lo)
-  req <- lo()
+  lo <- gar_api_generator("https://www.googleapis.com/storage/v1/",
+                          path_args = list(b = bucket,
+                                           o = ""),
+                          pars_args = pars,
+                          data_parse_function = parse_lo)
+  
+  req <- gar_api_page(lo, 
+                      page_f = function(x) attr(x, "nextPageToken"),
+                      page_method = "param", 
+                      page_arg = "pageToken")
+  
+  limit_columns(my_reduce_rbind(req), detail = detail)
+}
 
-  ## page through list if necessary
-  if(!is.null(attr(req, "nextPageToken"))){
-    npt <- attr(req, "nextPageToken")
-
-    while(!is.null(npt)){
-      myMessage("Paging through results...", level = 3)
-      lo2 <- googleAuthR::gar_api_generator("https://www.googleapis.com/storage/v1/",
-                                            path_args = list(b = bucket,
-                                                             o = ""),
-                                            pars_args = c(pars, list(pageToken = npt)),
-                                            data_parse_function = parse_lo)
-      more_req <- lo2(pars_arguments = npt)
-
-      npt <- attr(more_req, "nextPageToken")
-      req <- rbind(req, more_req)
-    }
+limit_columns <- function(req, detail){
+  
+  if(nrow(req) == 0){
+    return(data.frame())
   }
-
-
-
-  if(nrow(req) > 0){
-    out_names <- switch(detail,
-                        summary = c("name", "size", "updated"),
-                        more = c("name", "size", "bucket", "contentType",
-                                 "timeCreated", "updated", "storageClass"),
-                        full = TRUE
-    )
-    req[,out_names]
-  }
-
-  req
-
+  
+  out_names <- switch(detail,
+                      summary = c("name", "size", "updated"),
+                      more = c("name", "size", "bucket", "contentType",
+                               "timeCreated", "updated", "storageClass"),
+                      full = TRUE)
+  
+  req[,out_names]
 }
 
 ## parse
@@ -106,6 +96,10 @@ parse_lo <- function(x){
 
   attr(x, "nextPageToken") <- nextPageToken
   attr(x, "prefixes") <- prefixes
+  attr(x, "metadata") <- x$metadata
+  
+  x$metadata <- NULL
+  
   x
 }
 
@@ -280,7 +274,7 @@ gcs_get_object <- function(object_name,
 #' Use this to pass to uploads in \link{gcs_upload}
 #'
 #' @inheritParams Object
-#' @param object_name Name of the object. GCS uses this version if also set elsewhere.
+#' @param object_name Name of the object. GCS uses this version if also set elsewhere, or a \code{gs://} URL
 #'
 #' @return Object metadata for uploading of class \code{gar_Object}
 #' @family object functions
@@ -319,7 +313,7 @@ gcs_metadata_object <- function(object_name = NULL,
 #'
 #' Deletes an object from a bucket
 #'
-#' @param object_name Object to be deleted
+#' @param object_name Object to be deleted, or a \code{gs://} URL
 #' @param bucket Bucket to delete object from
 #' @param generation If present, deletes a specific version.
 #'
@@ -363,6 +357,68 @@ gcs_delete_object <- function(object_name,
   myMessage("Deleted '", object_name, "' from bucket '", bucket,"'")
   TRUE
 
+}
+
+#' Copy an object
+#' 
+#' Copies an object to a new destination
+#' 
+#' @param source_object The name of the object to copy, or a \code{gs://} URL
+#' @param destination_object The name of where to copy the object to, or a \code{gs://} URL
+#' @param source_bucket The bucket of the source object
+#' @param destination_bucket The bucket of the destination
+#' @param rewriteToken Include this field (from the previous rewrite response) on each rewrite request after the first one, until the rewrite response 'done' flag is true.
+#' @param destinationPredefinedAcl Apply a predefined set of access controls to the destination object. If not NULL must be one of the predefined access controls such as \code{"bucketOwnerFullControl"}
+#' 
+#' @return If successful, a rewrite object.
+#' @family object functions
+#' @import assertthat
+#' @importFrom googleAuthR gar_api_generator
+#' @export
+gcs_copy_object <- function(source_object,
+                            destination_object,
+                            source_bucket = gcs_get_global_bucket(),
+                            destination_bucket = gcs_get_global_bucket(),
+                            rewriteToken = NULL,
+                            destinationPredefinedAcl = NULL){
+  
+  assert_that(
+    is.string(source_object),
+    is.string(destination_object)
+  )
+  
+  source_gcs <- gcs_parse_gsurls(source_object)
+  if(!is.null(source_gcs)){
+    source_object <- source_gcs$obj
+    source_bucket <- source_gcs$bucket
+  }
+  destination_gcs <- gcs_parse_gsurls(destination_object)
+  if(!is.null(destination_gcs)){
+    destination_object <- destination_gcs$obj
+    destination_bucket <- destination_gcs$bucket
+  }
+  
+  source_bucket <- as.bucket_name(source_bucket)
+  destination_bucket <- as.bucket_name(destination_bucket)
+
+  source_object <- URLencode(source_object, reserved = TRUE)
+  destination_object <- URLencode(destination_object, reserved = TRUE)
+  
+  the_url <- sprintf("https://www.googleapis.com/storage/v1/b/%s/o/%s/rewriteTo/b/%s/o/%s", 
+                     source_bucket, source_object, destination_bucket, destination_object)
+  pars <- NULL
+  if(!is.null(rewriteToken)){
+    pars <- list(rewriteToken = rewriteToken)
+  }
+  if(!is.null(destinationPredefinedAcl)){
+    assert_that(is.string(destinationPredefinedAcl))
+    pars <- c(pars, list(destinationPredefinedAcl = destinationPredefinedAcl))
+  }
+  ob <- gar_api_generator(the_url,
+                          "POST",
+                          pars_args = pars,
+                          data_parse_function = function(x) x)
+  ob()
 }
 
 #' Object Object
