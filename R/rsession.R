@@ -151,10 +151,11 @@ gcs_source <- function(script,
 #' @param pattern An optional regular expression. Only file names which match the regular expression will be saved.
 #' @param exdir When downloading, specify a destination directory if required
 #' @param list When downloading, only list where the files would unzip to
+#' @param predefinedAcl Specify user access to object. Default is 'private'. Set to 'bucketLevel' for buckets with bucket level access enabled.
 #'
 #' @details
 #'
-#' Zip/unzip is performed before upload and after download using \link[zip]{zipr}.
+#' Zip/unzip is performed before upload and after download using \link[zip]{zip}.
 #'
 #'
 #' @return When uploading the GCS meta object; when downloading \code{TRUE} if successful
@@ -162,24 +163,44 @@ gcs_source <- function(script,
 #' @export
 #' @importFrom zip zip
 #' @family R session data functions
+#' @examples 
+#' 
+#' \dontrun{
+#' 
+#' gcs_save_all(
+#'   directory = "path-to-all-images",
+#'   bucket = "my-bucket",
+#'   predefinedAcl = "bucketLevel")
+#' }
 gcs_save_all <- function(directory = getwd(),
                          bucket = gcs_get_global_bucket(),
-                         pattern = ""){
+                         pattern = "",
+                         predefinedAcl = c("private", 
+                                           "bucketLevel", 
+                                           "authenticatedRead",
+                                           "bucketOwnerFullControl",
+                                           "bucketOwnerRead", 
+                                           "projectPrivate", 
+                                           "publicRead",
+                                           "default")){
+  
+  predefinedAcl <- match.arg(predefinedAcl)
 
   tmp <- tempfile(fileext = ".zip")
   on.exit(unlink(tmp))
 
   bucket <- as.bucket_name(bucket)
 
-  the_files <- file.path(directory,
-                         list.files(path = directory,
-                                    all.files = TRUE,
-                                    recursive = TRUE,
-                                    pattern = pattern))
+  the_files <- list.files(path = directory,
+                          all.files = TRUE,
+                          recursive = TRUE,
+                          pattern = pattern)
+  
+  withCallingHandlers(
+    zip::zip(tmp, files = the_files),
+    deprecated = function(e) NULL)
 
-  zip::zipr(tmp, files = the_files)
-
-  gcs_upload(tmp, bucket = bucket, name = directory)
+  gcs_upload(tmp, bucket = bucket, name = directory, predefinedAcl = predefinedAcl)
 
 }
 
@@ -199,21 +220,25 @@ gcs_load_all <- function(directory = getwd(),
 
   tmp2 <- tempdir()
   on.exit(unlink(tmp2))
-
+  
   unzipped <- unzip(tmp, exdir = tmp2)
-
-  new_files <- gsub(directory,exdir,gsub(tmp2, "", unzipped))
-
+  
   if(list){
+    new_files <- gsub(directory,exdir,gsub(tmp2, "", unzipped))
+  
     return(new_files)
   }
-
-  mapply(function(x, name){
-    suppressWarnings(file.copy(x, name,
-                               overwrite = FALSE,
-                               recursive = TRUE,
-                               copy.date = TRUE))
-  }, unzipped, new_files)
+  
+  filelist <- paste0(tmp2, "/", list.files(tmp2))
+  filelist <- filelist[filelist != tmp]
+  
+  if(!dir.exists(exdir)){
+    dir.create(exdir)
+  }
+  
+  file.copy(from = filelist, 
+            to = exdir, 
+            overwrite = TRUE, recursive = TRUE, copy.date = TRUE)
 
   TRUE
 

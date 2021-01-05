@@ -1,15 +1,14 @@
 context("setup")
 
 skip_if_no_token <- function() {
-  testthat::skip_if_not(googleAuthR::gar_has_token(), "No token")
+  skip_on_cran()
+  skip_on_travis()
 }
 
-if (gargle:::secret_can_decrypt("googleCloudStorageR")) {
-  json <- gargle:::secret_read("googleCloudStorageR", "tests_auth.json")
-  gcs_auth(json_file = rawToChar(json))
-  tmp <- tempfile(fileext = ".json")
-  write(rawToChar(json), file = tmp)
-  Sys.setenv("GCS_AUTH_FILE" = tmp)
+if(file.exists("/workspace/test_auth.json")){
+  gcs_auth(json_file="/workspace/test_auth.json")
+} else {
+  message("No authentication file found for testing")
 }
 
 context("Authentication")
@@ -19,6 +18,14 @@ test_that("Authentication", {
   
   # manual auth
   expect_true(googleAuthR::gar_has_token())
+})
+
+test_that("Expected env vars present",{
+  skip_if_no_token()
+  expect_true(nzchar(Sys.getenv("GCS_DEFAULT_BUCKET")))
+  expect_true(nzchar(Sys.getenv("GCS_DEFAULT_PROJECT")))
+  expect_true(nzchar(Sys.getenv("GCS_AUTH_FILE")))
+  
 })
 
 context("Buckets")
@@ -34,6 +41,9 @@ test_that("Bucket List", {
   expect_true(
     all(names(b) %in% c("name","storageClass","location","updated"))
   )
+  
+  no_buckets <- gcs_list_buckets("me-gtm-monitoring")
+  expect_true(is.null(no_buckets))
 })
 
 
@@ -42,7 +52,8 @@ test_that("Bucket Operations", {
   skip_if_no_token()
   
   buck <- Sys.getenv("GCS_DEFAULT_BUCKET")
-  expect_true(buck != "")
+  expect_true(nzchar(buck))
+  expect_equal(buck, "mark-edmondson-public-files")
   expect_true(buck == gcs_get_global_bucket())
   
   b <- gcs_get_bucket(buck)
@@ -99,8 +110,8 @@ test_that("Versioning buckets", {
   expect_false(gcs_version_bucket(buck, action = "disable"))  
   expect_false(gcs_version_bucket(buck, action = "status"))
   
-  expect_error(gcs_version_bucket(buck, action = "list"),
-               "`timeDeleted` property not found")
+  df <- gcs_version_bucket(buck, action = "list")
+  expect_equal(class(df), "data.frame")
 })
 
 context("Objects")
@@ -142,7 +153,8 @@ test_that("Object Operations", {
                           'storageClass', 'timeStorageClassUpdated', 
                           'size', 'md5Hash', 'mediaLink', 'crc32c', 
                           'etag', 'contentType', 
-                          'componentCount', 'contentLanguage'))
+                          'componentCount', 'contentLanguage',
+                          'eventBasedHold'))
   )
   
   gcs_upload(mtcars, bucket = buck, name="mtcars.csv")
@@ -152,6 +164,13 @@ test_that("Object Operations", {
   
   mtcars_meta <- gcs_get_object("mtcars.csv", bucket = buck, meta = TRUE)
   expect_equal(mtcars_meta$kind, "storage#object")
+  
+  copy <-  gcs_copy_object("mtcars.csv","mtcars2.csv", 
+                           source_bucket = buck,
+                           destination_bucket = buck)
+  expect_equal(copy$kind, "storage#rewriteResponse")
+  expect_equal(copy$resource$kind, "storage#object")
+  expect_equal(copy$resource$name, "mtcars2.csv")
 
 })
 
@@ -232,6 +251,12 @@ test_that("Uploads", {
   
   expect_equal(upload$kind, "storage#object")
   expect_equal(upload$name, "mtcars_meta.csv")
+  
+  # upload to bucketLevel Acl
+  bl <- gcs_upload(mtcars, bucket = "mark-bucketlevel-acl",
+                   predefinedAcl = "bucketLevel")
+  expect_equal(bl$kind, "storage#object")
+  
 })
 
 
@@ -396,6 +421,30 @@ test_that("We can save the R session", {
   unlink(".RData_test")
 })
 
+context("Grouped files")
+
+test_that("Load and Save All",{
+  skip_if_no_token()
+  
+  here <- getwd()
+  message("These files: ", paste(list.files(here, full.names = TRUE), 
+                                 collapse = "\n"))
+  
+  saved <- gcs_save_all(here)
+  expect_equal(saved$kind, "storage#object")
+
+  loaded <- gcs_load_all(here, exdir = "load_all")
+  expect_true(loaded)
+  # should be the same, aside from load_all directory
+  expect_equal(list.files(here)[!list.files(here) %in% list.files("load_all")],
+               "load_all")
+  
+  expect_true(gcs_delete_all(here))
+  gone <- gcs_list_objects(prefix = here)
+  expect_equal(nrow(gone), 0)
+  
+})
+
 
 context("Source files")
 
@@ -458,6 +507,7 @@ test_that("We can delete all test files", {
   expect_true(gcs_delete_object("example.R"))
   expect_true(gcs_delete_object("gcs_save_test.RData"))
   expect_true(gcs_delete_object(".RData_test"))
+  expect_true(gcs_delete_object("mtcars2.csv"))
 })
 
 test_that("We can delete the lifecycle bucket", {
@@ -489,7 +539,6 @@ test_that("Pubsub operations", {
   expect_true(all(ps_df$kind %in% "storage#notification"))
   
   expect_true(gcs_delete_pubsub(ps$id))
-  
   
 })
 

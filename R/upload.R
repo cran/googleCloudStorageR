@@ -8,7 +8,7 @@
 #' @param name What to call the file once uploaded. Default is the filepath
 #' @param object_function If not NULL, a \code{function(input, output)}
 #' @param object_metadata Optional metadata for object created via \link{gcs_metadata_object}
-#' @param predefinedAcl Specify user access to object. Default is 'private'
+#' @param predefinedAcl Specify user access to object. Default is 'private'. Set to 'bucketLevel' for buckets with bucket level access enabled.
 #' @param upload_type Override automatic decision on upload type
 #'
 #' @details
@@ -20,7 +20,7 @@
 #'  }
 #'
 #'
-#' By default the \code{upload_type} will be 'simple' if under 5MB, 'resumable' if over 5MB.
+#' By default the \code{upload_type} will be 'simple' if under 5MB, 'resumable' if over 5MB.  Use \link{gcs_upload_set_limit} to modify this boundary - you may want it smaller on slow connections, higher on faster connections.
 #'   'Multipart' upload is used if you provide a \code{object_metadata}.
 #'
 #' If \code{object_function} is NULL and \code{file} is not a character filepath,
@@ -74,7 +74,13 @@
 #' }
 #'
 #' gcs_upload(mtcars, name = "mtcars_csv2.csv", object_function = f)
-#'
+#' 
+#' # upload to a bucket with bucket level ACL set
+#' gcs_upload(mtcars, predefinedAcl = "bucketLevel")
+#' 
+#' # modify boundary between simple and resumable uploads
+#' # default 5000000L is 5MB
+#' gcs_upload_set_limit(1000000L)
 #' }
 #'
 #'
@@ -95,6 +101,7 @@ gcs_upload <- function(file,
                        object_metadata = NULL,
                        predefinedAcl = c(
                          "private",
+                         "bucketLevel",
                          "authenticatedRead",
                          "bucketOwnerFullControl",
                          "bucketOwnerRead",
@@ -118,6 +125,9 @@ gcs_upload <- function(file,
   
   ## so jsonlite::toJSON works
   if(!is.null(object_metadata)) class(object_metadata) <- "list"
+  
+  ## no caching
+  googleAuthR::gar_cache_setup(invalid_func = function(req){FALSE})
   
   # hack to get around method dispatch class for file
   gcs_upload_s3(file = file,
@@ -282,6 +292,18 @@ gcs_upload_s3.default <- function(file,
 }
 
 
+#' @param upload_limit Upload limit in bytes
+#' @rdname gcs_upload
+#' @export
+gcs_upload_set_limit <- function(upload_limit = 5000000L){
+  assert_that(
+    is.scalar(upload_limit),
+    is.integer(upload_limit)
+  )
+  myMessage("Setting upload limit for simple uploads to ", upload_limit)
+  options(googleCloudStorageR.upload_limit = upload_limit)
+}
+
 do_upload <- function(name,
                       bucket,
                       predefinedAcl,
@@ -293,8 +315,9 @@ do_upload <- function(name,
   myMessage("File size detected as ",
             format_object_size(file.size(temp), "auto"), level = 3)
   
-  # 5MB simple upload limit
-  UPLOAD_LIMIT <- 5000000L
+  # default is 5MB simple upload limit
+  UPLOAD_LIMIT <- getOption("googleCloudStorageR.upload_limit", 5000000L)
+  assert_that(is.scalar(UPLOAD_LIMIT))
   
   if(upload_type == "resumable" || file.size(temp) > UPLOAD_LIMIT){
     do_resumable_upload(name = name,
@@ -334,7 +357,7 @@ do_simple_upload <- function(name,
   pars_args <- list(uploadType="media",
                     name=name)
   
-  if(predefinedAcl != "default"){
+  if(!predefinedAcl %in% c("default","bucketLevel")){
     pars_args[["predefinedAcl"]] <- predefinedAcl
   }
   
@@ -377,19 +400,20 @@ do_multipart_upload <- function(name,
   
   pars_args <- list(uploadType="multipart",
                     name=name)
-  if(predefinedAcl != "default"){
+  
+  if(!predefinedAcl %in% c("default","bucketLevel")){
     pars_args[["predefinedAcl"]] <- predefinedAcl
   }
   
+  the_url <- sprintf("https://storage.googleapis.com/upload/storage/v1/b/%s/o",
+                     bucket)
   up <-
-    gar_api_generator("https://www.googleapis.com/upload/storage/v1",
+    gar_api_generator(the_url,
                       "POST",
-                      path_args = list(b = bucket,
-                                       o = ""),
                       pars_args = pars_args,
+                      checkTrailingSlash = FALSE,
                       customConfig = list(
-                        encode = "multipart",
-                        httr::add_headers("Content-Type" =  "multipart/related")
+                        encode = "multipart"
                       ))
   
   req <- up(the_body = bb)
@@ -409,7 +433,7 @@ do_resumable_upload <- function(name,
   
   pars_args <- list(uploadType="resumable",
                     name=name)
-  if(predefinedAcl != "default"){
+  if(!predefinedAcl %in% c("default","bucketLevel")){
     pars_args[["predefinedAcl"]] <- predefinedAcl
   }
   
@@ -425,8 +449,9 @@ do_resumable_upload <- function(name,
                                      
                                    ))
   
-  req <- up(the_body = object_metadata)
-  
+  # suppress empty JSON content warning (#120)
+  req <- suppressWarnings(up(the_body = object_metadata))
+    
   ## extract the upload URL
   if(req$status_code == 200){
     
@@ -434,7 +459,7 @@ do_resumable_upload <- function(name,
     myMessage("Found resumeable upload URL: ", upload_url, level = 3)
     
   } else {
-    stop("Couldn't find resumeable upload URL")
+    stop("Couldn't find resumeable upload URL", call. = FALSE)
   }
   
   up2 <- PUTme(upload_url,
@@ -499,7 +524,8 @@ gcs_retry_upload <- function(retry_object=NULL, upload_url=NULL, file=NULL, type
 
   if(is.null(retry_object)){
     if(any(is.null(upload_url), is.null(file), is.null(type))){
-      stop("Must supply either retry_object or all of upload_url, file and type")
+      stop("Must supply either retry_object or all of upload_url, file and type", 
+           call. = FALSE)
     }
   } else {
 

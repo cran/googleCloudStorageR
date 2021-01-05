@@ -124,6 +124,10 @@ gcs_list_buckets <- function(projectId,
               is.count(maxResults))
 
   parse_lb <- function(x){
+    if(is.null(x$items)){
+      myMessage("No buckets found in ", projectId, level = 3)
+      return(data.frame())
+    }
     x <- x$items
     x$kind <- NULL
     x$timeCreated <- timestamp_to_r(x$timeCreated)
@@ -141,6 +145,8 @@ gcs_list_buckets <- function(projectId,
                                    data_parse_function = parse_lb)
 
   out <- lb()
+  
+  if(nrow(out) < 1) return(NULL)
 
   out_names <- switch(detail,
                       summary = c("name", "storageClass", "location" ,"updated"),
@@ -215,7 +221,7 @@ gcs_get_bucket <- function(bucket = gcs_get_global_bucket(),
 #' @param lifecycle A list of \link{gcs_create_lifecycle} objects
 #'
 #' @details
-#'   \href{https://cloud.google.com/storage/docs/bucket-locations}{See here for details on location options}
+#'   \href{https://cloud.google.com/storage/docs/locations}{See here for details on location options}
 #'
 #' @family bucket functions
 #' @import assertthat

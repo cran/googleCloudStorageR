@@ -2,14 +2,23 @@
 % Please edit documentation in R/upload.R
 \name{gcs_upload}
 \alias{gcs_upload}
+\alias{gcs_upload_set_limit}
 \title{Upload a file of arbitrary type}
 \usage{
-gcs_upload(file, bucket = gcs_get_global_bucket(), type = NULL,
-  name = deparse(substitute(file)), object_function = NULL,
-  object_metadata = NULL, predefinedAcl = c("private",
-  "authenticatedRead", "bucketOwnerFullControl", "bucketOwnerRead",
-  "projectPrivate", "publicRead", "default"), upload_type = c("simple",
-  "resumable"))
+gcs_upload(
+  file,
+  bucket = gcs_get_global_bucket(),
+  type = NULL,
+  name = deparse(substitute(file)),
+  object_function = NULL,
+  object_metadata = NULL,
+  predefinedAcl = c("private", "bucketLevel", "authenticatedRead",
+    "bucketOwnerFullControl", "bucketOwnerRead", "projectPrivate", "publicRead",
+    "default"),
+  upload_type = c("simple", "resumable")
+)
+
+gcs_upload_set_limit(upload_limit = 5000000L)
 }
 \arguments{
 \item{file}{data.frame, list, R object or filepath (character) to upload file}
@@ -24,9 +33,11 @@ gcs_upload(file, bucket = gcs_get_global_bucket(), type = NULL,
 
 \item{object_metadata}{Optional metadata for object created via \link{gcs_metadata_object}}
 
-\item{predefinedAcl}{Specify user access to object. Default is 'private'}
+\item{predefinedAcl}{Specify user access to object. Default is 'private'. Set to 'bucketLevel' for buckets with bucket level access enabled.}
 
 \item{upload_type}{Override automatic decision on upload type}
+
+\item{upload_limit}{Upload limit in bytes}
 }
 \value{
 If successful, a metadata object
@@ -42,7 +53,7 @@ When using \code{object_function} it expects a function with two arguments:
  }
 
 
-By default the \code{upload_type} will be 'simple' if under 5MB, 'resumable' if over 5MB.
+By default the \code{upload_type} will be 'simple' if under 5MB, 'resumable' if over 5MB.  Use \link{gcs_upload_set_limit} to modify this boundary - you may want it smaller on slow connections, higher on faster connections.
   'Multipart' upload is used if you provide a \code{object_metadata}.
 
 If \code{object_function} is NULL and \code{file} is not a character filepath,
@@ -97,6 +108,12 @@ f <- function(input, output){
 
 gcs_upload(mtcars, name = "mtcars_csv2.csv", object_function = f)
 
+# upload to a bucket with bucket level ACL set
+gcs_upload(mtcars, predefinedAcl = "bucketLevel")
+
+# modify boundary between simple and resumable uploads
+# default 5000000L is 5MB
+gcs_upload_set_limit(1000000L)
 }
 
 

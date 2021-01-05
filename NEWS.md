@@ -1,9 +1,24 @@
+# googleCloudStorageR 0.6.0
+
+* Let users auth via an email again via `gcs_auth`
+* correct file.copy behaviour in `gcs_load_all()` (#112) - thanks @jasonmhoule
+* Allow GCS uploads if ACL has been set at bucket level (#111)
+* Let users set the boundary between simple and resumable upload limit via new option `option(googleCloudStorageR.upload_limit)` or `gcs_upload_set_limit()` - default is 5000000L or 5MB (#120)
+* Suppress warning for when resumable uploads are requesting the upload URL (#120)
+* Fix ability to upload meta data with objects (#108)
+* If file has no filesize will message without an error (#123)
+* If project has no buckets will give NULL and not an error (#100)
+* Fix `gcs_save_all()` to also accept bucket level ACL (#129)
+* Fix listing buckets for projects `gcs_list_buckets()` (#100)
+* Add `gcs_setup()` to help first time setup
+
 # googleCloudStorageR 0.5.1
 
 * Fix `gcs_save_all()` to use new `zip` for filepaths (Thanks @caewok) #107
 * fix unable to return object metadata (#105)
 * fix signature mismatch if object name contains / (#102)
 * document `gcs_version_bucket()` - thanks @j450h1 ! (#96)
+
 
 # googleCloudStorageR 0.5.0
 
