@@ -19,6 +19,8 @@ You can use your own Google Project with a credit card added to create buckets, 
 
 ## Configuring your own Google Project
 
+You will first need to [create a Google Cloud Project](https://cloud.google.com/resource-manager/docs/creating-managing-projects) and make sure that the Cloud Storage API is turned on.  It is by default for new projects.
+
 The recommended way is to use `gcs_setup()` which will help you create and download an authentication JSON key, and set your default bucket.
 
 ```r
@@ -93,6 +95,27 @@ This file will then used for authentication via `gcs_auth()` when you load the l
 library(googleCloudStorageR)
 
 gcs_get_bucket("your-bucket")
+```
+
+### Token-authentication
+
+You can also seamlessly authenticate as the service account your compute resource (i.e. Cloud-Function, AI Notebook etc...) is using by requesting
+a token and then passing that token to `gcs_auth` with the [gargle](https://gargle.r-lib.org/) library
+
+```r
+## Load googleCloudStorageR and gargle
+library(googleCloudStorageR)
+library(gargle)
+
+## Fetch token. See: https://developers.google.com/identity/protocols/oauth2/scopes
+scope <-c("https://www.googleapis.com/auth/cloud-platform")
+token <- token_fetch(scopes = scope)
+
+## Pass your token to gcs_auth
+gcs_auth(token = token)
+
+## Perform gcs operations as normal
+gcs_list_objects(bucket = "my-bucket")
 ```
 
 ### Setting a default Bucket

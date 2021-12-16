@@ -23,7 +23,9 @@
 #' @importFrom utils URLencode
 #' @import assertthat
 #' @export
-gcs_download_url <- function(object_name, bucket = gcs_get_global_bucket(), public = FALSE){
+gcs_download_url <- function(object_name, 
+                             bucket = gcs_get_global_bucket(), 
+                             public = FALSE){
 
   assert_that(
     is.character(bucket),
@@ -36,11 +38,10 @@ gcs_download_url <- function(object_name, bucket = gcs_get_global_bucket(), publ
   if(length(bucket) != 1 && length(bucket) != length(object_name)){
     stop("bucket must be length 1 or same length as object_name")
   }
-
+  
+  domain <- "https://storage.cloud.google.com"
   if(public){
     domain <- "https://storage.googleapis.com"
-  } else {
-    domain <- "https://storage.cloud.google.com"
   }
 
   file.path(domain, bucket, object_name, fsep = "/")
@@ -59,8 +60,18 @@ gcs_download_url <- function(object_name, bucket = gcs_get_global_bucket(), publ
 #' @export
 gcs_parse_download <- function(object, encoding = "UTF-8"){
   out <- content(object, encoding = encoding)
-  message("Object parsed to class: ", paste(class(out), collapse = " "))
   out
+}
+
+#' @rdname gcs_parse_download
+#' @export
+#' @details 
+#' 
+#' \code{gcs_parse_rds} will parse .rds files created via \link{saveRDS} without saving to disk 
+gcs_parse_rds <- function(object){
+  con <- gzcon(rawConnection(httr::content(object)))
+  on.exit(close(con))
+  readRDS(con)
 }
 
 #' Create signature

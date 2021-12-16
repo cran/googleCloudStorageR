@@ -4,6 +4,7 @@
 #' @param detail Set level of detail
 #' @param prefix Filter results to objects whose names begin with this prefix
 #' @param delimiter Use to list objects like a directory listing.
+#' @param versions If \code{TRUE}, lists all versions of an object as distinct results in order of increasing generation number. 
 #' @details
 #'
 #' Columns returned by \code{detail} are:
@@ -31,7 +32,8 @@
 gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
                              detail = c("summary","more","full"),
                              prefix = NULL,
-                             delimiter = NULL){
+                             delimiter = NULL,
+                             versions = FALSE){
 
   detail <- match.arg(detail)
 
@@ -39,7 +41,8 @@ gcs_list_objects <- function(bucket = gcs_get_global_bucket(),
 
   pars <- list(prefix = prefix,
                delimiter = delimiter,
-               pageToken = "")
+               pageToken = "",
+               versions = versions)
   pars <- rmNullObs(pars)
 
   lo <- gar_api_generator("https://www.googleapis.com/storage/v1/",
@@ -134,6 +137,7 @@ gcs_parse_gsurls <- function(gsurl){
 #' @param saveToDisk Specify a filename to save directly to disk
 #' @param overwrite If saving to a file, whether to overwrite it
 #' @param parseObject If saveToDisk is NULL, whether to parse with \code{parseFunction}
+#' @param generation The generation number for the noncurrent version, if you have object versioning enabled in your bucket e.g. \code{"1560468815691234"}
 #' @param parseFunction If saveToDisk is NULL, the function that will parse the download.  Defaults to \link{gcs_parse_download}
 #'
 #' @details
@@ -173,8 +177,23 @@ gcs_parse_gsurls <- function(gsurl){
 #' }
 #'
 #' ## get mtcars csv with custom parse function.
-#' gcs_get_object("mtcars_meta.csv", parseFunction = f)
-#'
+#' gcs_get_object("mtcars.csv", parseFunction = f)
+#' 
+#' ## download an RDS file using helper gcs_parse_rds()
+#' 
+#' gcs_get_object("obj.rds", parseFunction = gcs_parse_rds)
+#' 
+#' ## to download from a folder in your bucket
+#' my_folder <- "your_folder/"
+#' objs <- gcs_list_objects(prefix = my_folder)
+#' 
+#' dir.create(my_folder)
+#' 
+#' # download all the objects to that folder
+#' dls <- lapply(objs$name, function(x) gcs_get_object(x, saveToDisk = x))
+#' 
+
+#' 
 #' }
 #'
 #' @family object functions
@@ -189,7 +208,8 @@ gcs_get_object <- function(object_name,
                            saveToDisk = NULL,
                            overwrite = FALSE,
                            parseObject = TRUE,
-                           parseFunction = gcs_parse_download){
+                           parseFunction = gcs_parse_download,
+                           generation = NULL){
 
   assert_that(
     is.string(object_name),
@@ -202,6 +222,10 @@ gcs_get_object <- function(object_name,
     object_name <- parse_gsurl$obj
     bucket <- parse_gsurl$bucket
   }
+  
+  if(!is.null(generation)){
+    assert_that(is.string(generation))
+  }
 
   bucket <- as.bucket_name(bucket)
 
@@ -211,7 +235,7 @@ gcs_get_object <- function(object_name,
     alt = "json"
   } else {
     options(googleAuthR.rawResponse = TRUE)
-    on.exit(options(googleAuthR.rawResponse = FALSE))
+    on.exit(options(googleAuthR.rawResponse = FALSE), add = TRUE)
     alt = "media"
   }
 
@@ -224,49 +248,62 @@ gcs_get_object <- function(object_name,
   } else {
     customConfig <- NULL
   }
+  
+  cli::cli_process_start(paste("Downloading", URLdecode(object_name)))
+  
+  pars_args <- list(alt = alt,
+                    generation = generation)
+  pars_args <- rmNullObs(pars_args)
 
   ob <- gar_api_generator("https://www.googleapis.com/storage/v1/",
                           path_args = list(b = bucket,
                                            o = object_name),
-                          pars_args = list(alt = alt),
+                          pars_args = pars_args,
                           customConfig = customConfig)
   req <- ob()
-
-
-  if(!meta){
-    if(req$status_code == 404){
-      stop("File not found. Check object_name and if you have read permissions.
-           Looked for ", object_name)
-    }
-
-    if(!is.null(saveToDisk)){
-
-      myMessage("Saved ", URLdecode(object_name), " to ", saveToDisk,
-                " (",format_object_size(file.size(saveToDisk), "auto"),")",
-                level = 3)
-
-      out <- TRUE
-
-    } else {
-      message("Downloaded ", object_name)
-
-      if(parseObject){
-        out <- try(parseFunction(req))
-        if(is.error(out)){
-          stop("Problem parsing the object with supplied parseFunction.")
-        }
-      } else {
-        out <- req
-      }
-    }
-
-  } else {
-    out <- structure(req$content, class = "gcs_objectmeta")
+  
+  if(req$status_code == 404){
+    stop("File not found. Check object_name and if you have read permissions.
+           Looked for ", object_name, call. = FALSE)
   }
 
-
+  if(meta){
+    cli::cli_process_done(
+      msg_done = paste("Metadata for",URLdecode(object_name)))
+    return(structure(req$content, class = "gcs_objectmeta"))
+  }
+  
+  if(!is.null(saveToDisk)){
+    
+    msg <- paste("Saved", URLdecode(object_name), "to", saveToDisk,
+                 " (",format_object_size(file.size(saveToDisk), "auto"),")")
+    
+    cli::cli_process_done(msg_done = msg)
+    
+    return(TRUE)
+    
+  }
+    
+  cli::cli_status_update("Downloaded - parsing object")
+  
+  out <- req
+  
+  if(parseObject){
+    out <- tryCatch(
+      parseFunction(req),
+      error = function(err){
+        stop("Problem parsing the object with supplied parseFunction.", 
+             call. = FALSE)
+      })
+  }
+  
+  cli::cli_process_done(msg_done = paste("Downloaded and parsed",
+                                         URLdecode(object_name),
+                                         "into R object of class:", 
+                                         paste(class(out), collapse = ", ")))
+  
   out
-
+  
 }
 
 #' Make metadata for an object
@@ -293,7 +330,7 @@ gcs_metadata_object <- function(object_name = NULL,
     object_name <- parse_gsurl$obj
   }
 
-  object_name <- if(!is.null(object_name)) URLencode(object_name, reserved = TRUE)
+  object_name <- if(!is.null(object_name)) URLencode(object_name)
 
   out <- Object(name = object_name,
                 metadata = metadata,
@@ -324,6 +361,7 @@ gcs_metadata_object <- function(object_name = NULL,
 #' @import assertthat
 #' @importFrom googleAuthR gar_api_generator
 #' @export
+#' @seealso To delete all objects in a bucket see \link{gcs_delete_bucket_objects}
 gcs_delete_object <- function(object_name,
                               bucket = gcs_get_global_bucket(),
                               generation = NULL){
